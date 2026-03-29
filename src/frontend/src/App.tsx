@@ -181,8 +181,8 @@ export default function App() {
         <motion.div
           key="landing"
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 0.98, filter: "blur(8px)" }}
-          transition={{ duration: 0.5, ease: "easeInOut" }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
         >
           <LandingPage
             onEnter={() => {
@@ -196,8 +196,8 @@ export default function App() {
           key="login"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 0.98, filter: "blur(8px)" }}
-          transition={{ duration: 0.4, ease: "easeInOut" }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
         >
           <LoginPage
             onLogin={() => setShowLogin(false)}

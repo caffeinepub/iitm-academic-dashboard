@@ -7,6 +7,8 @@ interface LandingPageProps {
 
 export function LandingPage({ onEnter }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [splineReady, setSplineReady] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
   const splineOpacity = useTransform(scrollY, [0, 600], [1, 0.3]);
@@ -15,21 +17,71 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   const orb2Ref = useRef<HTMLDivElement>(null);
   const splineContainerRef = useRef<HTMLDivElement>(null);
 
+  // Load Spline script lazily after first paint, then inject viewer
   useEffect(() => {
-    const el = splineContainerRef.current;
-    if (!el) return;
-    const viewer = document.createElement("spline-viewer");
-    viewer.setAttribute(
-      "url",
-      "https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode",
-    );
-    viewer.setAttribute("loading", "lazy");
-    viewer.style.width = "100%";
-    viewer.style.height = "100%";
-    viewer.style.display = "block";
-    el.appendChild(viewer);
+    let cancelled = false;
+    let viewer: HTMLElement | null = null;
+
+    // Use requestIdleCallback (or setTimeout fallback) to defer heavy WebGL init
+    // until the browser is idle after the first paint
+    const loadSpline = () => {
+      if (cancelled) return;
+
+      // Inject the Spline viewer script if not already loaded
+      const existingScript = document.querySelector(
+        'script[src*="spline-viewer"]',
+      );
+
+      const appendViewer = () => {
+        if (cancelled) return;
+        const el = splineContainerRef.current;
+        if (!el) return;
+        viewer = document.createElement("spline-viewer");
+        viewer.setAttribute(
+          "url",
+          "https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode",
+        );
+        viewer.setAttribute("loading", "lazy");
+        viewer.style.width = "100%";
+        viewer.style.height = "100%";
+        viewer.style.display = "block";
+        el.appendChild(viewer);
+        if (!cancelled) setSplineReady(true);
+      };
+
+      if (existingScript) {
+        appendViewer();
+      } else {
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src =
+          "https://unpkg.com/@splinetool/viewer@1.12.73/build/spline-viewer.js";
+        script.onload = appendViewer;
+        document.head.appendChild(script);
+      }
+    };
+
+    // Delay Spline init so the page is interactive first
+    const handle =
+      typeof requestIdleCallback !== "undefined"
+        ? requestIdleCallback(loadSpline, { timeout: 2000 })
+        : (setTimeout(loadSpline, 800) as unknown as number);
+
     return () => {
-      el.removeChild(viewer);
+      cancelled = true;
+      if (typeof requestIdleCallback !== "undefined") {
+        cancelIdleCallback(handle as number);
+      } else {
+        clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+      }
+      const el = splineContainerRef.current;
+      if (viewer && el && el.contains(viewer)) {
+        try {
+          el.removeChild(viewer);
+        } catch {
+          // ignore
+        }
+      }
     };
   }, []);
 
@@ -38,6 +90,14 @@ export function LandingPage({ onEnter }: LandingPageProps) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const handleEnter = useCallback(() => {
+    // Hide Spline WebGL before triggering exit animation to prevent browser freeze
+    setLeaving(true);
+    setTimeout(() => {
+      onEnter();
+    }, 80);
+  }, [onEnter]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const vw = window.innerWidth;
@@ -63,15 +123,16 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       {/* Dark base */}
       <div className="landing-bg" />
 
-      {/* Spline 3D Robot — fullscreen background */}
+      {/* Spline 3D Robot — fullscreen background, loaded lazily */}
       <motion.div
         style={{
-          opacity: splineOpacity,
+          opacity: splineReady ? splineOpacity : 0,
           position: "fixed",
           inset: 0,
           zIndex: 0,
           pointerEvents: "none",
           overflow: "hidden",
+          display: leaving ? "none" : "block",
         }}
       >
         {/* Hide Spline watermark */}
@@ -141,7 +202,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
                 cursor: "pointer",
                 padding: 0,
               }}
-              onClick={onEnter}
+              onClick={handleEnter}
               data-ocid="landing.dashboard.link"
             >
               Dashboard
@@ -152,7 +213,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               whileTap={{ scale: 0.97 }}
               className="glass-btn-accent glow-btn"
               style={{ padding: "8px 22px", fontSize: "14px" }}
-              onClick={onEnter}
+              onClick={handleEnter}
               data-ocid="landing.nav.primary_button"
             >
               Get Started
@@ -248,7 +309,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               whileHover={{ scale: 1.05, y: -3 }}
               whileTap={{ scale: 0.96 }}
               className="landing-cta-primary glow-btn"
-              onClick={onEnter}
+              onClick={handleEnter}
               data-ocid="landing.get_started.primary_button"
             >
               Get Started →
@@ -258,7 +319,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
               whileHover={{ scale: 1.04, y: -2 }}
               whileTap={{ scale: 0.97 }}
               className="landing-cta-outline"
-              onClick={onEnter}
+              onClick={handleEnter}
               data-ocid="landing.view_demo.secondary_button"
             >
               View Demo
@@ -371,7 +432,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
             whileHover={{ scale: 1.06, y: -4 }}
             whileTap={{ scale: 0.95 }}
             className="landing-cta-primary glow-btn"
-            onClick={onEnter}
+            onClick={handleEnter}
             data-ocid="landing.final.primary_button"
           >
             Launch Dashboard →
