@@ -8,6 +8,10 @@ interface LandingPageProps {
 
 export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminUser, setAdminUser] = useState("");
+  const [adminPass, setAdminPass] = useState("");
+  const [adminError, setAdminError] = useState("");
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
   const splineOpacity = useTransform(scrollY, [0, 600], [1, 0.3]);
@@ -54,6 +58,19 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   }, []);
 
   const stagger = (i: number) => ({ delay: 0.05 + i * 0.08 });
+
+  const handleAdminLogin = () => {
+    if (adminUser === "BE24B034" && adminPass === "bobbe@2006") {
+      setShowAdminModal(false);
+      setAdminUser("");
+      setAdminPass("");
+      setAdminError("");
+      if (onAdmin) onAdmin();
+      else window.location.hash = "admin";
+    } else {
+      setAdminError("Invalid username or password.");
+    }
+  };
 
   const goToAdmin = () => {
     if (onAdmin) {
@@ -267,10 +284,13 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
               whileHover={{ scale: 1.04, y: -2 }}
               whileTap={{ scale: 0.97 }}
               className="landing-cta-outline"
-              onClick={onEnter}
-              data-ocid="landing.view_demo.secondary_button"
+              onClick={() => {
+                setShowAdminModal(true);
+                setAdminError("");
+              }}
+              data-ocid="landing.admin_login.secondary_button"
             >
-              View Demo
+              🛡️ Admin Login
             </motion.button>
           </motion.div>
 
@@ -421,6 +441,147 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
           🛡️ Admin Login
         </motion.button>
       </footer>
+
+      {/* Admin Login Modal */}
+      {showAdminModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.7)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowAdminModal(false)}
+          onKeyDown={(e) => e.key === "Escape" && setShowAdminModal(false)}
+          tabIndex={-1}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(10,12,28,0.95)",
+              border: "1px solid rgba(139,92,246,0.3)",
+              borderRadius: "20px",
+              padding: "40px 36px",
+              width: "100%",
+              maxWidth: "380px",
+              boxShadow: "0 0 60px rgba(139,92,246,0.2)",
+            }}
+          >
+            <div style={{ textAlign: "center", marginBottom: "24px" }}>
+              <div style={{ fontSize: "2rem", marginBottom: "8px" }}>🛡️</div>
+              <h2
+                style={{
+                  color: "#fff",
+                  fontSize: "1.4rem",
+                  fontWeight: 700,
+                  margin: 0,
+                }}
+              >
+                Admin Login
+              </h2>
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.5)",
+                  fontSize: "0.85rem",
+                  marginTop: "6px",
+                }}
+              >
+                Enter your credentials to access the admin panel
+              </p>
+            </div>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              <input
+                type="text"
+                placeholder="Username"
+                value={adminUser}
+                onChange={(e) => setAdminUser(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(139,92,246,0.25)",
+                  borderRadius: "10px",
+                  padding: "12px 16px",
+                  color: "#fff",
+                  fontSize: "0.95rem",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={adminPass}
+                onChange={(e) => setAdminPass(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(139,92,246,0.25)",
+                  borderRadius: "10px",
+                  padding: "12px 16px",
+                  color: "#fff",
+                  fontSize: "0.95rem",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+              />
+              {adminError && (
+                <p
+                  style={{
+                    color: "#f87171",
+                    fontSize: "0.85rem",
+                    margin: 0,
+                    textAlign: "center",
+                  }}
+                >
+                  {adminError}
+                </p>
+              )}
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleAdminLogin}
+                style={{
+                  background: "linear-gradient(135deg, #7c3aed, #2563eb)",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "13px",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: "1rem",
+                  cursor: "pointer",
+                  marginTop: "4px",
+                }}
+              >
+                Login →
+              </motion.button>
+              <button
+                type="button"
+                onClick={() => setShowAdminModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  padding: "4px",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

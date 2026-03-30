@@ -1,9 +1,28 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
-import type { Holiday, SemesterConfig, SlotExamDate } from "../backend.d";
+import type { Holiday, SlotExamDate } from "../backend.d";
 import { GlassCard } from "../components/GlassCard";
-import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
+
+const LS_KEY = "instiflow_semester_configs";
+
+interface LocalSemesterConfig {
+  id: string;
+  name: string;
+  year: number;
+  semType: string;
+  classStart: string;
+  classEnd: string;
+  quiz1Start: string;
+  quiz1End: string;
+  quiz2Start: string;
+  quiz2End: string;
+  endSemStart: string;
+  endSemEnd: string;
+  holidays: Holiday[];
+  events: Holiday[];
+  slotExamDates: SlotExamDate[];
+  isActive: boolean;
+}
 
 const SLOTS = [
   "A",
@@ -48,7 +67,20 @@ const DEFAULT_SLOT_EXAM_DATES: Record<
   T: { quiz1: "2026-02-17", quiz2: "2026-03-28", endSem: "2026-05-16" },
 };
 
-function emptyForm(): Omit<SemesterConfig, "id" | "year" | "isActive"> & {
+function readConfigs(): LocalSemesterConfig[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeConfigs(configs: LocalSemesterConfig[]) {
+  localStorage.setItem(LS_KEY, JSON.stringify(configs));
+}
+
+function emptyForm(): Omit<LocalSemesterConfig, "id" | "year" | "isActive"> & {
   year: string;
 } {
   return {
@@ -73,87 +105,37 @@ function emptyForm(): Omit<SemesterConfig, "id" | "year" | "isActive"> & {
 }
 
 export function AdminPanel({ onBack }: { onBack?: () => void }) {
-  const { login, clear, loginStatus, identity, isLoggingIn } =
-    useInternetIdentity();
-  const { actor, isFetching } = useActor();
+  const [credentialsOk, setCredentialsOk] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [credError, setCredError] = useState("");
 
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [checkingAdmin, setCheckingAdmin] = useState(false);
-  const [configs, setConfigs] = useState<SemesterConfig[]>([]);
-  const [loadingConfigs, setLoadingConfigs] = useState(false);
-
+  const [configs, setConfigs] = useState<LocalSemesterConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
-
-  const [adminToken, setAdminToken] = useState("");
-  const [initError, setInitError] = useState("");
-  const [initLoading, setInitLoading] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const isLoggedIn = loginStatus === "success" && !!identity;
-
-  const checkAdmin = useCallback(async () => {
-    if (!actor || isFetching) return;
-    setCheckingAdmin(true);
-    try {
-      const result = await actor.isCallerAdmin();
-      setIsAdmin(result);
-    } catch {
-      setIsAdmin(false);
-    }
-    setCheckingAdmin(false);
-  }, [actor, isFetching]);
-
-  const loadConfigs = useCallback(async () => {
-    if (!actor || !isAdmin) return;
-    setLoadingConfigs(true);
-    try {
-      const list = await actor.listSemesterConfigs();
-      setConfigs(list);
-    } catch {
-      // ignore
-    }
-    setLoadingConfigs(false);
-  }, [actor, isAdmin]);
+  const loadConfigs = useCallback(() => {
+    setConfigs(readConfigs());
+  }, []);
 
   useEffect(() => {
-    if (isLoggedIn && actor && !isFetching) {
-      checkAdmin();
-    }
-  }, [isLoggedIn, actor, isFetching, checkAdmin]);
+    if (credentialsOk) loadConfigs();
+  }, [credentialsOk, loadConfigs]);
 
-  useEffect(() => {
-    if (isAdmin) loadConfigs();
-  }, [isAdmin, loadConfigs]);
-
-  const handleInitAdmin = async () => {
-    if (!actor || !adminToken.trim()) return;
-    setInitLoading(true);
-    setInitError("");
-    try {
-      await (actor as any)._initializeAccessControlWithSecret(
-        adminToken.trim(),
-      );
-      await checkAdmin();
-    } catch (e: any) {
-      setInitError(e?.message || "Failed to initialize. Check token.");
-    }
-    setInitLoading(false);
+  const handleSetActive = (id: string) => {
+    const updated = readConfigs().map((c) => ({ ...c, isActive: c.id === id }));
+    writeConfigs(updated);
+    setConfigs(updated);
   };
 
-  const handleSetActive = async (id: string) => {
-    if (!actor) return;
-    await actor.setActiveSemester(id);
-    await loadConfigs();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!actor) return;
+  const handleDelete = (id: string) => {
     if (!confirm("Delete this semester config?")) return;
-    await actor.deleteSemesterConfig(id);
-    await loadConfigs();
+    const updated = readConfigs().filter((c) => c.id !== id);
+    writeConfigs(updated);
+    setConfigs(updated);
   };
 
   const openNew = () => {
@@ -163,11 +145,11 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
     setShowForm(true);
   };
 
-  const openEdit = (cfg: SemesterConfig) => {
+  const openEdit = (cfg: LocalSemesterConfig) => {
     setEditingId(cfg.id);
     setForm({
       name: cfg.name,
-      year: String(Number(cfg.year)),
+      year: String(cfg.year),
       semType: cfg.semType,
       classStart: cfg.classStart,
       classEnd: cfg.classEnd,
@@ -188,8 +170,7 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    if (!actor) return;
+  const handleSave = () => {
     if (!form.name.trim()) {
       setSaveError("Semester name is required.");
       return;
@@ -198,10 +179,10 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
     setSaveError("");
     try {
       const id = editingId || `${form.semType}-${form.year}-${Date.now()}`;
-      const config: SemesterConfig = {
+      const config: LocalSemesterConfig = {
         id,
         name: form.name,
-        year: BigInt(form.year || "2026"),
+        year: Number(form.year || "2026"),
         semType: form.semType,
         classStart: form.classStart,
         classEnd: form.classEnd,
@@ -216,8 +197,18 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
         slotExamDates: form.slotExamDates,
         isActive: false,
       };
-      await actor.saveSemesterConfig(config);
-      await loadConfigs();
+      const existing = readConfigs();
+      const idx = existing.findIndex((c) => c.id === id);
+      let updated: LocalSemesterConfig[];
+      if (idx >= 0) {
+        updated = existing.map((c) =>
+          c.id === id ? { ...config, isActive: c.isActive } : c,
+        );
+      } else {
+        updated = [...existing, config];
+      }
+      writeConfigs(updated);
+      setConfigs(updated);
       setShowForm(false);
     } catch (e: any) {
       setSaveError(e?.message || "Save failed.");
@@ -258,9 +249,16 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
     setForm((f) => ({ ...f, [type]: f[type].filter((_, i) => i !== idx) }));
   };
 
-  // — render states —
-
-  if (!isLoggedIn) {
+  // — credentials gate —
+  if (!credentialsOk) {
+    const handleCredLogin = () => {
+      if (usernameInput === "BE24B034" && passwordInput === "bobbe@2006") {
+        setCredentialsOk(true);
+        setCredError("");
+      } else {
+        setCredError("Invalid username or password.");
+      }
+    };
     return (
       <div
         style={{
@@ -277,10 +275,10 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
           initial={{ opacity: 0, y: 24, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          style={{ width: "100%", maxWidth: 420 }}
+          style={{ width: "100%", maxWidth: 400 }}
         >
           <GlassCard>
-            <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
               <div
                 style={{
                   fontSize: 36,
@@ -292,216 +290,88 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
               </div>
               <h1
                 className="page-heading-gradient"
-                style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}
+                style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}
               >
-                Admin Panel
+                Admin Login
               </h1>
-              <p
-                style={{
-                  color: "#6B7590",
-                  fontSize: 14,
-                  marginBottom: 28,
-                  lineHeight: 1.6,
-                }}
-              >
-                Manage semester calendar data, holidays, exam windows, and slot
-                schedules for InstiFlow.
+              <p style={{ color: "#6B7590", fontSize: 13, marginBottom: 24 }}>
+                Enter your admin credentials to continue.
               </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <input
+                type="text"
+                placeholder="Username"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCredLogin()}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 10,
+                  padding: "11px 14px",
+                  color: "#fff",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCredLogin()}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 10,
+                  padding: "11px 14px",
+                  color: "#fff",
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+              {credError && (
+                <p
+                  style={{
+                    color: "#f87171",
+                    fontSize: 13,
+                    textAlign: "center",
+                    margin: 0,
+                  }}
+                >
+                  {credError}
+                </p>
+              )}
               <motion.button
-                data-ocid="admin.login_button"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 className="btn-gradient"
-                onClick={login}
-                disabled={isLoggingIn}
-                style={{ width: "100%", padding: "12px 24px", fontSize: 15 }}
-              >
-                {isLoggingIn ? "Connecting…" : "Login with Internet Identity"}
-              </motion.button>
-              <div style={{ marginTop: 16 }}>
-                <button
-                  type="button"
-                  onClick={onBack}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "#4A5270",
-                    fontSize: 12,
-                    padding: 0,
-                  }}
-                >
-                  ← Back to InstiFlow
-                </button>
-              </div>
-            </div>
-          </GlassCard>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (checkingAdmin || isFetching || isAdmin === null) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background:
-            "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 50%, #0a0a14 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{
-            repeat: Number.POSITIVE_INFINITY,
-            duration: 1,
-            ease: "linear",
-          }}
-          style={{
-            width: 40,
-            height: 40,
-            border: "3px solid rgba(99,102,241,0.2)",
-            borderTop: "3px solid #6366f1",
-            borderRadius: "50%",
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background:
-            "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 50%, #0a0a14 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{ width: "100%", maxWidth: 480 }}
-        >
-          <GlassCard>
-            <h2
-              className="page-heading-gradient"
-              style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}
-            >
-              Admin Setup
-            </h2>
-            <p style={{ color: "#6B7590", fontSize: 13, marginBottom: 24 }}>
-              Logged in as{" "}
-              <span style={{ color: "#8b5cf6" }}>
-                {identity?.getPrincipal().toString().slice(0, 20)}…
-              </span>
-            </p>
-
-            <div
-              style={{
-                padding: "20px",
-                background: "rgba(99,102,241,0.05)",
-                border: "1px solid rgba(99,102,241,0.15)",
-                borderRadius: 12,
-                marginBottom: 16,
-              }}
-            >
-              <div
+                onClick={handleCredLogin}
                 style={{
-                  fontSize: 14,
-                  color: "#C8D0E8",
-                  fontWeight: 600,
-                  marginBottom: 4,
+                  width: "100%",
+                  padding: "12px 24px",
+                  fontSize: 15,
+                  marginTop: 4,
                 }}
               >
-                First Time Setup
-              </div>
-              <p
-                style={{
-                  color: "#6B7590",
-                  fontSize: 12,
-                  marginBottom: 12,
-                  lineHeight: 1.5,
-                }}
-              >
-                Enter the admin token provided in your deployment settings.
-              </p>
-              <input
-                data-ocid="admin.input"
-                type="password"
-                className="glass-input"
-                placeholder="Admin token"
-                value={adminToken}
-                onChange={(e) => setAdminToken(e.target.value)}
-                style={{ width: "100%", marginBottom: 10, fontSize: 13 }}
-              />
-              {initError && (
-                <div
-                  data-ocid="admin.error_state"
-                  style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}
-                >
-                  {initError}
-                </div>
-              )}
-              <motion.button
-                data-ocid="admin.submit_button"
-                whileTap={{ scale: 0.97 }}
-                className="btn-gradient"
-                onClick={handleInitAdmin}
-                disabled={initLoading || !adminToken.trim()}
-                style={{ fontSize: 13, padding: "8px 20px" }}
-              >
-                {initLoading ? "Initializing…" : "Initialize as Admin"}
+                Login
               </motion.button>
-            </div>
-
-            <div
-              style={{
-                padding: "16px",
-                background: "rgba(255,255,255,0.02)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                borderRadius: 12,
-              }}
-            >
-              <div style={{ fontSize: 13, color: "#6B7590" }}>
-                Already have an admin? Ask the current admin to grant you access
-                via the admin panel.
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: 20,
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-              }}
-            >
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                className="glass-btn"
-                onClick={clear}
-                style={{ fontSize: 12, padding: "6px 16px" }}
-              >
-                Log Out
-              </motion.button>
-              <a
-                href="/"
+              <button
+                type="button"
+                onClick={onBack}
                 style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
                   color: "#4A5270",
                   fontSize: 12,
-                  textDecoration: "none",
+                  padding: 0,
+                  marginTop: 4,
                 }}
               >
                 ← Back to InstiFlow
-              </a>
+              </button>
             </div>
           </GlassCard>
         </motion.div>
@@ -541,10 +411,7 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
               Admin Panel — Semester Manager
             </h1>
             <p style={{ color: "#6B7590", fontSize: 13 }}>
-              Logged in as{" "}
-              <span style={{ color: "#8b5cf6" }}>
-                {identity?.getPrincipal().toString().slice(0, 24)}…
-              </span>
+              Manage semester data for all students.
             </p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -561,37 +428,32 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
             <motion.button
               whileTap={{ scale: 0.97 }}
               className="glass-btn"
-              onClick={clear}
+              onClick={() => setCredentialsOk(false)}
               style={{ fontSize: 13, padding: "9px 16px" }}
             >
               Log Out
             </motion.button>
-            <a
-              href="/"
-              style={{
-                color: "#4A5270",
-                fontSize: 12,
-                textDecoration: "none",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              ← App
-            </a>
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#4A5270",
+                  fontSize: 12,
+                  padding: "9px 0",
+                }}
+              >
+                ← App
+              </button>
+            )}
           </div>
         </motion.div>
 
         {/* Config list */}
-        {loadingConfigs ? (
-          <GlassCard>
-            <div
-              data-ocid="admin.loading_state"
-              style={{ color: "#6B7590", fontSize: 13 }}
-            >
-              Loading semester configs…
-            </div>
-          </GlassCard>
-        ) : configs.length === 0 ? (
+        {configs.length === 0 ? (
           <GlassCard>
             <div
               data-ocid="admin.empty_state"
@@ -681,7 +543,7 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
                       >
                         <span>
                           {cfg.semType === "even" ? "Even" : "Odd"} Sem{" "}
-                          {String(Number(cfg.year))}
+                          {cfg.year}
                         </span>
                         <span>·</span>
                         <span>{cfg.holidays.length} holidays</span>
@@ -1001,8 +863,9 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
                     </motion.button>
                   </div>
                   {form.holidays.map((h, idx) => (
+                    // biome-ignore lint/correctness/useJsxKeyInIterable: holiday entries use index as stable key
                     <div
-                      key={`entry-${idx}-${h.date}`}
+                      key={`h-${h.date}-${h.name}-${idx}`}
                       style={{
                         display: "flex",
                         gap: 8,
@@ -1067,7 +930,7 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
                   </div>
                   {form.events.map((h, idx) => (
                     <div
-                      key={`entry-${idx}-${h.date}`}
+                      key={`e-${h.date}-${h.name}-${idx}`}
                       style={{
                         display: "flex",
                         gap: 8,

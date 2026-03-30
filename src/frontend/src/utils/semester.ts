@@ -13,27 +13,54 @@ export interface SemCalendar {
   endSemEnd: string;
 }
 
+/**
+ * IITM Even Sem Jan–May 2026 exam slot dates.
+ *
+ * Quiz 1 & 2 pairing pattern (from official IITM calendar):
+ *   Mon : A, H, P
+ *   Tue : B, M, Q
+ *   Wed : C, J, R
+ *   Thu : D, E (E/D interchange), L, S
+ *   Fri : F, G (F/G interchange), K, T
+ *
+ * End Sem pattern (derived from IITM Jul-Nov 2022 official calendar structure):
+ *   May 4  (Mon): A, P
+ *   May 5  (Tue): G
+ *   May 6  (Wed): B, Q
+ *   May 7  (Thu): C, R
+ *   May 8  (Fri): H, J
+ *   May 11 (Mon): D, S
+ *   May 12 (Tue): K, L
+ *   May 13 (Wed): E
+ *   May 14 (Thu): F, T
+ *   May 15 (Fri): M
+ */
 export const SLOT_EXAM_DATES: Record<
   string,
   { quiz1: string; quiz2: string; endSem: string }
 > = {
+  // ── Mon ──────────────────────────────────────────────────────────────────
   A: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-04" },
-  B: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-05" },
-  C: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-05" },
-  D: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-06" },
-  E: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-06" },
-  F: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-07" },
-  G: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-07" },
-  H: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-08" },
-  J: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-09" },
-  K: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-11" },
-  L: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-12" },
-  M: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-13" },
-  P: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-14" },
-  Q: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-14" },
-  R: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-15" },
-  S: { quiz1: "2026-02-16", quiz2: "2026-03-28", endSem: "2026-05-15" },
-  T: { quiz1: "2026-02-17", quiz2: "2026-03-28", endSem: "2026-05-16" },
+  H: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-08" },
+  P: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-04" },
+  // ── Tue ──────────────────────────────────────────────────────────────────
+  B: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-06" },
+  M: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-15" },
+  Q: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-06" },
+  // ── Wed ──────────────────────────────────────────────────────────────────
+  C: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-07" },
+  J: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-08" },
+  R: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-07" },
+  // ── Thu : D + E (E/D interchange) + L + S ────────────────────────────────
+  D: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-11" },
+  E: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-13" },
+  L: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-12" },
+  S: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-11" },
+  // ── Fri : F + G (F/G interchange) + K + T ────────────────────────────────
+  F: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-14" },
+  G: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-05" },
+  K: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-12" },
+  T: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-14" },
 };
 
 export function autoDetectSem(date: Date = new Date()): SemType {
