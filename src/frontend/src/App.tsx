@@ -191,6 +191,8 @@ export default function App() {
                 courses={data.courses}
                 attendance={data.attendance}
                 tasks={data.tasks}
+                examEntries={data.examEntries}
+                semSettings={data.semSettings}
               />
               <motion.div
                 onMouseMove={handleMouseMove}

@@ -1,8 +1,4 @@
-// Firebase is loaded from CDN at runtime to avoid npm build-time dependency.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const cdnImport = (url: string): Promise<any> =>
-  new Function("u", "return import(u)")(url);
-
+const cdnImport = (url) => new Function("u", "return import(u)")(url);
 const firebaseConfig = {
   apiKey: "AIzaSyACeYwNljzgrk8WAywxKSHoj_juuk2rPbg",
   authDomain: "insti-flow.firebaseapp.com",
@@ -10,17 +6,14 @@ const firebaseConfig = {
   storageBucket: "insti-flow.firebasestorage.app",
   messagingSenderId: "439140382247",
   appId: "1:439140382247:web:08bdb56afb68e0a9014002",
-  measurementId: "G-5MWJ8TFFER",
+  measurementId: "G-5MWJ8TFFER"
 };
-
 const CDN = "https://www.gstatic.com/firebasejs/10.12.0";
-
-let _app: unknown = null;
-let _auth: unknown = null;
-let _db: unknown = null;
-let _googleProvider: unknown = null;
-
-export async function getFirebaseApp() {
+let _app = null;
+let _auth = null;
+let _db = null;
+let _googleProvider = null;
+async function getFirebaseApp() {
   if (_app) return _app;
   try {
     const { initializeApp } = await cdnImport(`${CDN}/firebase-app.js`);
@@ -30,8 +23,7 @@ export async function getFirebaseApp() {
   }
   return _app;
 }
-
-export async function getFirebaseAuth() {
+async function getFirebaseAuth() {
   if (_auth) return _auth;
   try {
     const app = await getFirebaseApp();
@@ -43,8 +35,7 @@ export async function getFirebaseAuth() {
   }
   return _auth;
 }
-
-export async function getGoogleProvider() {
+async function getGoogleProvider() {
   if (_googleProvider) return _googleProvider;
   try {
     const { GoogleAuthProvider } = await cdnImport(`${CDN}/firebase-auth.js`);
@@ -54,8 +45,7 @@ export async function getGoogleProvider() {
   }
   return _googleProvider;
 }
-
-export async function getFirestoreDb() {
+async function getFirestoreDb() {
   if (_db) return _db;
   try {
     const app = await getFirebaseApp();
@@ -67,17 +57,15 @@ export async function getFirestoreDb() {
   }
   return _db;
 }
-
-export let auth: unknown = null;
-export let googleProvider: unknown = null;
-export let db: unknown = null;
-
 getFirebaseAuth().then((a) => {
-  auth = a;
 });
 getGoogleProvider().then((p) => {
-  googleProvider = p;
 });
 getFirestoreDb().then((d) => {
-  db = d;
 });
+export {
+  getFirebaseApp,
+  getFirebaseAuth,
+  getFirestoreDb,
+  getGoogleProvider
+};
