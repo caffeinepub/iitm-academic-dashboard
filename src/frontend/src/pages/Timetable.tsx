@@ -97,6 +97,37 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
   const [ovName, setOvName] = useState("");
   const [ovTime, setOvTime] = useState("");
 
+  // Extra Slots (6 PM – 8 PM)
+  interface ExtraSlot {
+    id: string;
+    name: string;
+    code?: string;
+    venue?: string;
+    days: string[];
+    time: string;
+    color: string;
+  }
+  const [extraSlots, setExtraSlots] = useState<ExtraSlot[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("instiflow_extra_slots") ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [showExtraSection, setShowExtraSection] = useState(false);
+  const [showExtraForm, setShowExtraForm] = useState(false);
+  const [exName, setExName] = useState("");
+  const [exCode, setExCode] = useState("");
+  const [exVenue, setExVenue] = useState("");
+  const [exDays, setExDays] = useState<string[]>(["Monday"]);
+  const [exTime, setExTime] = useState("18:00–20:00");
+  const [exColor, setExColor] = useState(PASTEL_COLORS[4] ?? "#a78bfa");
+
+  const saveExtraSlots = (list: ExtraSlot[]) => {
+    setExtraSlots(list);
+    localStorage.setItem("instiflow_extra_slots", JSON.stringify(list));
+  };
+
   // Cell delete confirmation
   const [deleteCell, setDeleteCell] = useState<{
     courseId?: string;
@@ -1469,6 +1500,367 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
           )}
         </div>
       </GlassCard>
+
+      {/* ─── Extra Slots (6 PM – 8 PM) ───────────────────────────── */}
+      <div style={{ marginBottom: 16 }} className="print-hide">
+        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+          <button
+            type="button"
+            onClick={() => setShowExtraSection(!showExtraSection)}
+            style={{
+              width: "100%",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "16px 20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "inherit",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#F0F4FF" }}>
+                ⏰ Extra Slots (6 PM – 8 PM)
+              </span>
+              <span style={{ fontSize: 12, color: "#6B7590" }}>
+                Add Happiness of Living or any evening class (6–8 PM).
+              </span>
+            </div>
+            <span
+              style={{
+                color: "#6B7590",
+                fontSize: 18,
+                transition: "transform 0.2s",
+                transform: showExtraSection ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            >
+              ▾
+            </span>
+          </button>
+          <AnimatePresence initial={false}>
+            {showExtraSection && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{ overflow: "hidden" }}
+              >
+                <div style={{ padding: "0 20px 20px" }}>
+                  {extraSlots.length === 0 && !showExtraForm && (
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "#4A5270",
+                        marginBottom: 12,
+                      }}
+                    >
+                      No extra slots added yet.
+                    </p>
+                  )}
+                  {extraSlots.map((ex) => (
+                    <div
+                      key={ex.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: `${ex.color}22`,
+                        border: `1px solid ${ex.color}55`,
+                        borderRadius: 10,
+                        padding: "10px 14px",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: "#F0F4FF",
+                          }}
+                        >
+                          {ex.name}
+                        </span>
+                        {ex.code && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#6B7590",
+                              marginLeft: 8,
+                            }}
+                          >
+                            {ex.code}
+                          </span>
+                        )}
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#8B95B0",
+                            marginTop: 2,
+                          }}
+                        >
+                          {ex.days.join(", ")} · {ex.time}
+                          {ex.venue && (
+                            <span style={{ color: "#6B7590" }}>
+                              {" "}
+                              · {ex.venue}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          saveExtraSlots(
+                            extraSlots.filter((e) => e.id !== ex.id),
+                          )
+                        }
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#FF7A59",
+                          cursor: "pointer",
+                          fontSize: 18,
+                          opacity: 0.8,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {!showExtraForm ? (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="glass-btn-accent"
+                      style={{
+                        fontSize: 13,
+                        padding: "9px 20px",
+                        marginTop: 4,
+                      }}
+                      onClick={() => setShowExtraForm(true)}
+                    >
+                      + Add Extra Slot
+                    </motion.button>
+                  ) : (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#6B7590",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Course Name *
+                        </span>
+                        <input
+                          value={exName}
+                          onChange={(e) => setExName(e.target.value)}
+                          placeholder="e.g. Happiness of Living"
+                          className="glass-input"
+                          style={{ width: "100%", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#6B7590",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Course Code
+                          </span>
+                          <input
+                            value={exCode}
+                            onChange={(e) => setExCode(e.target.value)}
+                            placeholder="e.g. HS3010"
+                            className="glass-input"
+                            style={{ width: "100%", boxSizing: "border-box" }}
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#6B7590",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Venue
+                          </span>
+                          <input
+                            value={exVenue}
+                            onChange={(e) => setExVenue(e.target.value)}
+                            placeholder="e.g. CLT"
+                            className="glass-input"
+                            style={{ width: "100%", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#6B7590",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Time
+                        </span>
+                        <input
+                          value={exTime}
+                          onChange={(e) => setExTime(e.target.value)}
+                          placeholder="e.g. 18:00–20:00"
+                          className="glass-input"
+                          style={{ width: "100%", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#6B7590",
+                            display: "block",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Days
+                        </span>
+                        <div
+                          style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+                        >
+                          {DAYS.map((day) => (
+                            <span
+                              key={day}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                color: "#B0BAD0",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={exDays.includes(day)}
+                                onChange={(e) =>
+                                  setExDays(
+                                    e.target.checked
+                                      ? [...exDays, day]
+                                      : exDays.filter((d) => d !== day),
+                                  )
+                                }
+                                style={{ accentColor: "#8b5cf6" }}
+                              />
+                              {day.slice(0, 3)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#6B7590",
+                            display: "block",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Color
+                        </span>
+                        <div
+                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+                        >
+                          {PASTEL_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setExColor(c)}
+                              style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: "50%",
+                                background: c,
+                                border:
+                                  exColor === c
+                                    ? "2px solid #fff"
+                                    : "2px solid transparent",
+                                cursor: "pointer",
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                        <motion.button
+                          whileTap={{ scale: 0.97 }}
+                          className="btn-gradient"
+                          style={{ fontSize: 13, padding: "9px 20px" }}
+                          onClick={() => {
+                            if (!exName.trim()) return;
+                            saveExtraSlots([
+                              ...extraSlots,
+                              {
+                                id: Date.now().toString(),
+                                name: exName.trim(),
+                                code: exCode.trim(),
+                                venue: exVenue.trim(),
+                                days: exDays,
+                                time: exTime.trim() || "18:00–20:00",
+                                color: exColor,
+                              },
+                            ]);
+                            setExName("");
+                            setExCode("");
+                            setExVenue("");
+                            setExDays(["Monday"]);
+                            setExTime("18:00–20:00");
+                            setExColor(PASTEL_COLORS[4] ?? "#a78bfa");
+                            setShowExtraForm(false);
+                          }}
+                        >
+                          Add
+                        </motion.button>
+                        <motion.button
+                          whileTap={{ scale: 0.97 }}
+                          className="glass-btn"
+                          style={{ fontSize: 13, padding: "9px 20px" }}
+                          onClick={() => setShowExtraForm(false)}
+                        >
+                          Cancel
+                        </motion.button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </GlassCard>
+      </div>
 
       {/* Course Cards */}
       <GlassCard className="print-hide" style={{ marginBottom: 16 }}>
