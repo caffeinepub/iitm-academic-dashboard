@@ -1,5 +1,14 @@
 import { motion, useScroll, useTransform } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+const SplineViewer = lazy(() => import("@splinetool/react-spline"));
 
 interface LandingPageProps {
   onEnter: () => void;
@@ -12,29 +21,75 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [splineLoaded, setSplineLoaded] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
   const splineOpacity = useTransform(scrollY, [0, 600], [1, 0.3]);
 
   const orb1Ref = useRef<HTMLDivElement>(null);
   const orb2Ref = useRef<HTMLDivElement>(null);
-  const splineContainerRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
+  // Canvas particle fallback animation
   useEffect(() => {
-    const el = splineContainerRef.current;
+    const el = canvasContainerRef.current;
     if (!el) return;
-    const viewer = document.createElement("spline-viewer");
-    viewer.setAttribute(
-      "url",
-      "https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode",
-    );
-    viewer.setAttribute("loading", "lazy");
-    viewer.style.width = "100%";
-    viewer.style.height = "100%";
-    viewer.style.display = "block";
-    el.appendChild(viewer);
+    const canvas = document.createElement("canvas");
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    canvas.style.display = "block";
+    el.appendChild(canvas);
+
+    const resize = () => {
+      canvas.width = el.offsetWidth;
+      canvas.height = el.offsetHeight;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    const ctx = canvas.getContext("2d")!;
+    const particles: {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      r: number;
+      alpha: number;
+    }[] = [];
+    for (let i = 0; i < 80; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: Math.random() * 2 + 0.5,
+        alpha: Math.random() * 0.5 + 0.1,
+      });
+    }
+
+    let animId: number;
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(139,92,246,${p.alpha})`;
+        ctx.fill();
+      }
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+
     return () => {
-      el.removeChild(viewer);
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+      if (el.contains(canvas)) el.removeChild(canvas);
     };
   }, []);
 
@@ -89,7 +144,7 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
       {/* Dark base */}
       <div className="landing-bg" />
 
-      {/* Spline 3D Robot — fullscreen background */}
+      {/* Canvas particle fallback — always rendered underneath */}
       <motion.div
         style={{
           opacity: splineOpacity,
@@ -100,31 +155,41 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
           overflow: "hidden",
         }}
       >
-        {/* Hide Spline watermark */}
-        <style>{`
-          spline-viewer::part(logo) { display: none !important; }
-          spline-viewer::part(watermark) { display: none !important; }
-        `}</style>
         <div
-          ref={splineContainerRef}
+          ref={canvasContainerRef}
           style={{
             width: "100%",
             height: "100%",
             display: "block",
           }}
         />
-        {/* Cover any visible Spline watermark at bottom-right */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            right: 0,
-            width: "220px",
-            height: "48px",
-            background: "#06080f",
-            zIndex: 10,
-          }}
-        />
+      </motion.div>
+
+      {/* Spline 3D scene — lazy loaded, fades in over canvas fallback */}
+      <motion.div
+        style={{
+          opacity: splineOpacity,
+          position: "fixed",
+          inset: 0,
+          zIndex: 1,
+          pointerEvents: "none",
+          overflow: "hidden",
+        }}
+      >
+        <Suspense fallback={null}>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: splineLoaded ? 1 : 0 }}
+            transition={{ duration: 1.2, ease: "easeInOut" }}
+            style={{ width: "100%", height: "100%" }}
+          >
+            <SplineViewer
+              scene="https://prod.spline.design/6Wq1Q7YGyM-iab9i/scene.splinecode"
+              onLoad={() => setSplineLoaded(true)}
+              style={{ width: "100%", height: "100%" }}
+            />
+          </motion.div>
+        </Suspense>
       </motion.div>
 
       <div ref={orb1Ref} className="landing-orb landing-orb-1" />
