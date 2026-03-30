@@ -1,3 +1,4 @@
+import Spline from "@splinetool/react-spline";
 import { motion, useScroll, useTransform } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -20,53 +21,6 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   const orb1Ref = useRef<HTMLDivElement>(null);
   const orb2Ref = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const splineContainerRef = useRef<HTMLDivElement>(null);
-
-  // Load Spline viewer web component via script injection
-  useEffect(() => {
-    const SCENE =
-      "https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode";
-    const SCRIPT_SRC =
-      "https://unpkg.com/@splinetool/viewer@1.9.82/build/spline-viewer.js";
-
-    const inject = () => {
-      const container = splineContainerRef.current;
-      if (!container) return;
-
-      // Create the <spline-viewer> element
-      const viewer = document.createElement("spline-viewer") as HTMLElement & {
-        url: string;
-      };
-      viewer.setAttribute("url", SCENE);
-      viewer.style.width = "100%";
-      viewer.style.height = "100%";
-      viewer.style.display = "block";
-
-      // Listen for load event
-      viewer.addEventListener("load", () => setSplineLoaded(true));
-
-      container.appendChild(viewer);
-    };
-
-    // Only inject the script once
-    if (!document.querySelector("script[data-spline-viewer]")) {
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = SCRIPT_SRC;
-      script.setAttribute("data-spline-viewer", "true");
-      script.onload = inject;
-      document.head.appendChild(script);
-    } else {
-      // Script already loaded, inject viewer directly
-      inject();
-    }
-
-    return () => {
-      if (splineContainerRef.current) {
-        splineContainerRef.current.innerHTML = "";
-      }
-    };
-  }, []);
 
   // Canvas particle fallback — shown until Spline loads
   useEffect(() => {
@@ -220,9 +174,10 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
           transition={{ duration: 1.4, ease: "easeInOut" }}
           style={{ width: "100%", height: "100%" }}
         >
-          <div
-            ref={splineContainerRef}
-            style={{ width: "100%", height: "100%", display: "block" }}
+          <Spline
+            scene="https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode"
+            onLoad={() => setSplineLoaded(true)}
+            style={{ width: "100%", height: "100%" }}
           />
         </motion.div>
       </motion.div>
