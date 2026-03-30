@@ -17,17 +17,26 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   const orb2Ref = useRef<HTMLDivElement>(null);
   const splineContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load Spline script lazily after first paint, then inject viewer
+  // Load Spline only after first user interaction, with 8s fallback
   useEffect(() => {
     let cancelled = false;
     let viewer: HTMLElement | null = null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Use requestIdleCallback (or setTimeout fallback) to defer heavy WebGL init
-    // until the browser is idle after the first paint
     const loadSpline = () => {
       if (cancelled) return;
 
-      // Inject the Spline viewer script if not already loaded
+      // Remove event listeners so this only fires once
+      window.removeEventListener("mousemove", onInteraction);
+      window.removeEventListener("scroll", onInteraction);
+      window.removeEventListener("touchstart", onInteraction);
+
+      // Cancel fallback timer if interaction happened first
+      if (fallbackTimer !== null) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+
       const existingScript = document.querySelector(
         'script[src*="spline-viewer"]',
       );
@@ -61,18 +70,23 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       }
     };
 
-    // Delay Spline init so the page is interactive first
-    const handle =
-      typeof requestIdleCallback !== "undefined"
-        ? requestIdleCallback(loadSpline, { timeout: 2000 })
-        : (setTimeout(loadSpline, 800) as unknown as number);
+    const onInteraction = () => loadSpline();
+
+    // Attach one-time interaction listeners
+    window.addEventListener("mousemove", onInteraction, { passive: true });
+    window.addEventListener("scroll", onInteraction, { passive: true });
+    window.addEventListener("touchstart", onInteraction, { passive: true });
+
+    // Fallback: load anyway after 8 seconds for passive viewers
+    fallbackTimer = setTimeout(loadSpline, 8000);
 
     return () => {
       cancelled = true;
-      if (typeof requestIdleCallback !== "undefined") {
-        cancelIdleCallback(handle as number);
-      } else {
-        clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+      window.removeEventListener("mousemove", onInteraction);
+      window.removeEventListener("scroll", onInteraction);
+      window.removeEventListener("touchstart", onInteraction);
+      if (fallbackTimer !== null) {
+        clearTimeout(fallbackTimer);
       }
       const el = splineContainerRef.current;
       if (viewer && el && el.contains(viewer)) {
@@ -123,7 +137,7 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       {/* Dark base */}
       <div className="landing-bg" />
 
-      {/* Spline 3D Robot — fullscreen background, loaded lazily */}
+      {/* Spline 3D Robot — fullscreen background, loaded on first interaction */}
       <motion.div
         style={{
           opacity: splineReady ? splineOpacity : 0,
