@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { useEffect, useState } from "react";
 import { GlassCard } from "../components/GlassCard";
 import type { SemSettings } from "../types";
 import { autoDetectSem } from "../utils/semester";
@@ -16,6 +17,37 @@ export function SettingsView({
   studentName,
   onUpdateName,
 }: Props) {
+  interface NotifPrefs {
+    dailySummaryTime: string;
+    examAlerts: boolean;
+    taskAlerts: boolean;
+    customReminders: { id: string; label: string; datetime: string }[];
+  }
+
+  const defaultPrefs: NotifPrefs = {
+    dailySummaryTime: "07:00",
+    examAlerts: true,
+    taskAlerts: true,
+    customReminders: [],
+  };
+
+  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(() => {
+    try {
+      return {
+        ...defaultPrefs,
+        ...JSON.parse(localStorage.getItem("notifPrefs") || "{}"),
+      };
+    } catch {
+      return defaultPrefs;
+    }
+  });
+  const [newReminderLabel, setNewReminderLabel] = useState("");
+  const [newReminderDatetime, setNewReminderDatetime] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem("notifPrefs", JSON.stringify(notifPrefs));
+  }, [notifPrefs]);
+
   const clearAll = () => {
     if (
       confirm(
@@ -180,6 +212,213 @@ export function SettingsView({
           </motion.button>
         )}
       </GlassCard>
+      {/* Notification Preferences */}
+      <GlassCard style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "#6B7590",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            marginBottom: 14,
+            fontWeight: 600,
+          }}
+        >
+          Notification Preferences
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label
+              htmlFor="daily-summary-time"
+              style={{
+                fontSize: 12,
+                color: "#8B9AC0",
+                display: "block",
+                marginBottom: 4,
+              }}
+            >
+              Daily summary time
+            </label>
+            <input
+              id="daily-summary-time"
+              data-ocid="settings.notif.input"
+              type="time"
+              value={notifPrefs.dailySummaryTime}
+              onChange={(e) =>
+                setNotifPrefs((prev) => ({
+                  ...prev,
+                  dailySummaryTime: e.target.value,
+                }))
+              }
+              className="glass-input"
+              style={{ fontSize: 13, width: "auto" }}
+            />
+          </div>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              data-ocid="settings.notif.exam.checkbox"
+              type="checkbox"
+              checked={notifPrefs.examAlerts}
+              onChange={(e) =>
+                setNotifPrefs((prev) => ({
+                  ...prev,
+                  examAlerts: e.target.checked,
+                }))
+              }
+              style={{ width: 16, height: 16, accentColor: "#8B5CF6" }}
+            />
+            <span style={{ fontSize: 13, color: "#B0BAD0" }}>
+              Exam reminders (1 week, 3 days, 1 day before)
+            </span>
+          </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              data-ocid="settings.notif.task.checkbox"
+              type="checkbox"
+              checked={notifPrefs.taskAlerts}
+              onChange={(e) =>
+                setNotifPrefs((prev) => ({
+                  ...prev,
+                  taskAlerts: e.target.checked,
+                }))
+              }
+              style={{ width: 16, height: 16, accentColor: "#8B5CF6" }}
+            />
+            <span style={{ fontSize: 13, color: "#B0BAD0" }}>
+              Task deadline reminders
+            </span>
+          </label>
+          <div>
+            <div style={{ fontSize: 12, color: "#8B9AC0", marginBottom: 8 }}>
+              Custom Reminders
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginBottom: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              <input
+                data-ocid="settings.notif.reminder.input"
+                type="text"
+                placeholder="Reminder label (optional)"
+                value={newReminderLabel}
+                onChange={(e) => setNewReminderLabel(e.target.value)}
+                className="glass-input"
+                style={{ fontSize: 12, flex: 1, minWidth: 120 }}
+              />
+              <input
+                data-ocid="settings.notif.reminder_datetime.input"
+                type="datetime-local"
+                value={newReminderDatetime}
+                onChange={(e) => setNewReminderDatetime(e.target.value)}
+                className="glass-input"
+                style={{ fontSize: 12, flex: 1, minWidth: 160 }}
+              />
+              <motion.button
+                data-ocid="settings.notif.reminder.button"
+                whileTap={{ scale: 0.97 }}
+                className="btn-gradient"
+                style={{
+                  padding: "8px 16px",
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => {
+                  if (!newReminderDatetime) return;
+                  const reminder = {
+                    id: Date.now().toString(),
+                    label: newReminderLabel.trim() || "Custom Reminder",
+                    datetime: newReminderDatetime,
+                  };
+                  setNotifPrefs((prev) => ({
+                    ...prev,
+                    customReminders: [...prev.customReminders, reminder],
+                  }));
+                  setNewReminderLabel("");
+                  setNewReminderDatetime("");
+                }}
+              >
+                + Add
+              </motion.button>
+            </div>
+            {notifPrefs.customReminders.length === 0 ? (
+              <div
+                data-ocid="settings.notif.reminder.empty_state"
+                style={{ color: "#3D4460", fontSize: 12 }}
+              >
+                No custom reminders set.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {notifPrefs.customReminders.map((r, idx) => (
+                  <div
+                    key={r.id}
+                    data-ocid={`settings.notif.reminder.item.${idx + 1}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 12px",
+                      background: "rgba(139,92,246,0.1)",
+                      borderRadius: 8,
+                      border: "1px solid rgba(139,92,246,0.2)",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#E0E6FF",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {r.label}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#6B7590" }}>
+                        {new Date(r.datetime).toLocaleString()}
+                      </div>
+                    </div>
+                    <motion.button
+                      data-ocid={`settings.notif.reminder.delete_button.${idx + 1}`}
+                      whileTap={{ scale: 0.95 }}
+                      className="glass-btn glass-btn-red"
+                      style={{ padding: "4px 10px", fontSize: 11 }}
+                      onClick={() =>
+                        setNotifPrefs((prev) => ({
+                          ...prev,
+                          customReminders: prev.customReminders.filter(
+                            (x) => x.id !== r.id,
+                          ),
+                        }))
+                      }
+                    >
+                      Remove
+                    </motion.button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </GlassCard>
+
       <GlassCard style={{ borderColor: "rgba(255,122,89,0.3)" }}>
         <div
           style={{
@@ -202,6 +441,25 @@ export function SettingsView({
           Clear All Data
         </motion.button>
       </GlassCard>
+      <div
+        style={{
+          marginTop: 32,
+          textAlign: "center",
+          color: "rgba(169,176,199,0.6)",
+          fontSize: 12,
+          letterSpacing: "0.05em",
+        }}
+      >
+        <span style={{ color: "rgba(139,92,246,0.9)", fontWeight: 600 }}>
+          Created by BHARATH
+        </span>
+        {" · "}
+        <span style={{ color: "rgba(169,176,199,0.8)" }}>BE24</span>
+        {"  ·  "}
+        <span style={{ color: "rgba(99,179,237,0.9)", fontWeight: 600 }}>
+          Powered by IITM BAZAAR
+        </span>
+      </div>
     </motion.div>
   );
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GlassCard } from "../components/GlassCard";
 import type { Course } from "../types";
 import {
@@ -10,6 +10,16 @@ import {
   getSlotColor,
   getSlotScheduleDesc,
 } from "../utils/slots";
+
+interface EveningSlot {
+  id: string;
+  courseName: string;
+  courseCode: string;
+  venue: string;
+  days: string[];
+  startTime: string;
+  endTime: string;
+}
 
 interface Props {
   courses: Course[];
@@ -97,37 +107,6 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
   const [ovName, setOvName] = useState("");
   const [ovTime, setOvTime] = useState("");
 
-  // Extra Slots (6 PM – 8 PM)
-  interface ExtraSlot {
-    id: string;
-    name: string;
-    code?: string;
-    venue?: string;
-    days: string[];
-    time: string;
-    color: string;
-  }
-  const [extraSlots, setExtraSlots] = useState<ExtraSlot[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("instiflow_extra_slots") ?? "[]");
-    } catch {
-      return [];
-    }
-  });
-  const [showExtraSection, setShowExtraSection] = useState(false);
-  const [showExtraForm, setShowExtraForm] = useState(false);
-  const [exName, setExName] = useState("");
-  const [exCode, setExCode] = useState("");
-  const [exVenue, setExVenue] = useState("");
-  const [exDays, setExDays] = useState<string[]>(["Monday"]);
-  const [exTime, setExTime] = useState("18:00–20:00");
-  const [exColor, setExColor] = useState(PASTEL_COLORS[4] ?? "#a78bfa");
-
-  const saveExtraSlots = (list: ExtraSlot[]) => {
-    setExtraSlots(list);
-    localStorage.setItem("instiflow_extra_slots", JSON.stringify(list));
-  };
-
   // Cell delete confirmation
   const [deleteCell, setDeleteCell] = useState<{
     courseId?: string;
@@ -137,6 +116,26 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
 
   // Save/Load
   const [showSaveLoad, setShowSaveLoad] = useState(false);
+
+  // Evening slots (6PM-8PM)
+  const [showEveningSlots, setShowEveningSlots] = useState(false);
+  const [eveningSlots, setEveningSlots] = useState<EveningSlot[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("eveningSlots") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [evCourseName, setEvCourseName] = useState("");
+  const [evCourseCode, setEvCourseCode] = useState("");
+  const [evVenue, setEvVenue] = useState("");
+  const [evDays, setEvDays] = useState<string[]>([]);
+  const [evStartTime, setEvStartTime] = useState("18:00");
+  const [evEndTime, setEvEndTime] = useState("20:00");
+
+  useEffect(() => {
+    localStorage.setItem("eveningSlots", JSON.stringify(eveningSlots));
+  }, [eveningSlots]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const saveOverrides = (list: DayOverride[]) => {
@@ -1157,7 +1156,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                         labSlot?: string | null,
                       ) => {
                         const bg = course?.color ?? null;
-                        const filled = !!(bg || overrideName);
+                        const filled = !!(course || bg || overrideName);
                         // For empty bottom halves, show the lab slot letter instead
                         const displaySlot =
                           !isLab && !filled && labSlot ? labSlot : slotLetter;
@@ -1219,23 +1218,40 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                         course?.code ||
                                         course?.name.slice(0, 6)}
                                     </span>
-                                    {(course?.venue || course?.name) &&
-                                      !isLab && (
-                                        <span
-                                          style={{
-                                            fontSize: 7,
-                                            color: "rgba(0,0,0,0.55)",
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
-                                            whiteSpace: "nowrap",
-                                            maxWidth: "100%",
-                                            display: "block",
-                                            textAlign: "center",
-                                          }}
-                                        >
-                                          {course?.venue ?? ""}
-                                        </span>
-                                      )}
+                                    {course?.name && (
+                                      <span
+                                        style={{
+                                          fontSize: 7,
+                                          color: "rgba(0,0,0,0.7)",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                          maxWidth: "100%",
+                                          display: "block",
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {course.name.length > 12
+                                          ? `${course.name.slice(0, 11)}…`
+                                          : course.name}
+                                      </span>
+                                    )}
+                                    {course?.venue && (
+                                      <span
+                                        style={{
+                                          fontSize: 7,
+                                          color: "rgba(0,0,0,0.55)",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                          maxWidth: "100%",
+                                          display: "block",
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {course.venue}
+                                      </span>
+                                    )}
                                   </>
                                 )}
                               </>
@@ -1293,7 +1309,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                     const overrideName = overrideInfo?.name ?? null;
                     const overrideTime = overrideInfo?.time ?? null;
                     const bg = course?.color ?? null;
-                    const filled = !!(bg || overrideName);
+                    const filled = !!(course || bg || overrideName);
 
                     return (
                       <motion.td
@@ -1501,366 +1517,249 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
         </div>
       </GlassCard>
 
-      {/* ─── Extra Slots (6 PM – 8 PM) ───────────────────────────── */}
-      <div style={{ marginBottom: 16 }} className="print-hide">
-        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
-          <button
-            type="button"
-            onClick={() => setShowExtraSection(!showExtraSection)}
-            style={{
-              width: "100%",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "16px 20px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontFamily: "inherit",
-            }}
-          >
+      {/* Evening & Extra Classes */}
+      <GlassCard className="print-hide" style={{ marginBottom: 16 }}>
+        <button
+          type="button"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            cursor: "pointer",
+            background: "none",
+            border: "none",
+            width: "100%",
+            padding: 0,
+          }}
+          onClick={() => setShowEveningSlots(!showEveningSlots)}
+        >
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#B0BAD0" }}>
+            ⏰ Evening &amp; Extra Classes (6 PM – 8 PM)
+          </div>
+          <span style={{ color: "#6B7590", fontSize: 18 }}>
+            {showEveningSlots ? "▲" : "▼"}
+          </span>
+        </button>
+        {showEveningSlots && (
+          <div style={{ marginTop: 16 }}>
+            {/* Add form */}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
-                textAlign: "left",
+                gap: 8,
+                marginBottom: 16,
+                padding: "14px 16px",
+                background: "rgba(139,92,246,0.08)",
+                borderRadius: 10,
+                border: "1px solid rgba(139,92,246,0.2)",
               }}
             >
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#F0F4FF" }}>
-                ⏰ Extra Slots (6 PM – 8 PM)
-              </span>
-              <span style={{ fontSize: 12, color: "#6B7590" }}>
-                Add Happiness of Living or any evening class (6–8 PM).
-              </span>
-            </div>
-            <span
-              style={{
-                color: "#6B7590",
-                fontSize: 18,
-                transition: "transform 0.2s",
-                transform: showExtraSection ? "rotate(180deg)" : "rotate(0deg)",
-              }}
-            >
-              ▾
-            </span>
-          </button>
-          <AnimatePresence initial={false}>
-            {showExtraSection && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{ overflow: "hidden" }}
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#6B7590",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                }}
               >
-                <div style={{ padding: "0 20px 20px" }}>
-                  {extraSlots.length === 0 && !showExtraForm && (
-                    <p
-                      style={{
-                        fontSize: 13,
-                        color: "#4A5270",
-                        marginBottom: 12,
-                      }}
-                    >
-                      No extra slots added yet.
-                    </p>
-                  )}
-                  {extraSlots.map((ex) => (
-                    <div
-                      key={ex.id}
+                Add Evening Slot
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 8,
+                }}
+              >
+                <input
+                  className="glass-input"
+                  placeholder="Course Name"
+                  value={evCourseName}
+                  onChange={(e) => setEvCourseName(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+                <input
+                  className="glass-input"
+                  placeholder="Course Code"
+                  value={evCourseCode}
+                  onChange={(e) => setEvCourseCode(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+                <input
+                  className="glass-input"
+                  placeholder="Venue"
+                  value={evVenue}
+                  onChange={(e) => setEvVenue(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    className="glass-input"
+                    type="time"
+                    value={evStartTime}
+                    onChange={(e) => setEvStartTime(e.target.value)}
+                    style={{ fontSize: 13, flex: 1 }}
+                  />
+                  <span style={{ color: "#6B7590" }}>–</span>
+                  <input
+                    className="glass-input"
+                    type="time"
+                    value={evEndTime}
+                    onChange={(e) => setEvEndTime(e.target.value)}
+                    style={{ fontSize: 13, flex: 1 }}
+                  />
+                </div>
+              </div>
+              <div>
+                <div
+                  style={{ fontSize: 11, color: "#6B7590", marginBottom: 6 }}
+                >
+                  Days:
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) => (
+                    <label
+                      key={d}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        background: `${ex.color}22`,
-                        border: `1px solid ${ex.color}55`,
-                        borderRadius: 10,
-                        padding: "10px 14px",
-                        marginBottom: 8,
+                        gap: 4,
+                        cursor: "pointer",
                       }}
                     >
-                      <div>
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 700,
-                            color: "#F0F4FF",
-                          }}
-                        >
-                          {ex.name}
-                        </span>
-                        {ex.code && (
+                      <input
+                        type="checkbox"
+                        checked={evDays.includes(d)}
+                        onChange={(e) => {
+                          if (e.target.checked)
+                            setEvDays((prev) => [...prev, d]);
+                          else setEvDays((prev) => prev.filter((x) => x !== d));
+                        }}
+                      />
+                      <span style={{ fontSize: 12, color: "#B0BAD0" }}>
+                        {d}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <motion.button
+                data-ocid="timetable.evening.button"
+                whileTap={{ scale: 0.97 }}
+                className="btn-gradient"
+                style={{
+                  alignSelf: "flex-start",
+                  padding: "8px 18px",
+                  fontSize: 13,
+                }}
+                onClick={() => {
+                  if (!evCourseName.trim()) return;
+                  const slot: EveningSlot = {
+                    id: Date.now().toString(),
+                    courseName: evCourseName.trim(),
+                    courseCode: evCourseCode.trim(),
+                    venue: evVenue.trim(),
+                    days: evDays,
+                    startTime: evStartTime,
+                    endTime: evEndTime,
+                  };
+                  setEveningSlots((prev) => [...prev, slot]);
+                  setEvCourseName("");
+                  setEvCourseCode("");
+                  setEvVenue("");
+                  setEvDays([]);
+                  setEvStartTime("18:00");
+                  setEvEndTime("20:00");
+                }}
+              >
+                + Add Slot
+              </motion.button>
+            </div>
+            {eveningSlots.length === 0 ? (
+              <div style={{ color: "#3D4460", fontSize: 13 }}>
+                No evening slots added yet.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {eveningSlots.map((es, idx) => (
+                  <div
+                    key={es.id}
+                    data-ocid={`timetable.evening.item.${idx + 1}`}
+                    style={{
+                      padding: "12px 16px",
+                      background: "rgba(139,92,246,0.12)",
+                      borderRadius: 10,
+                      border: "1px solid rgba(139,92,246,0.25)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: "#E0E6FF",
+                          fontSize: 14,
+                        }}
+                      >
+                        {es.courseName}{" "}
+                        {es.courseCode && (
                           <span
                             style={{
-                              fontSize: 11,
-                              color: "#6B7590",
-                              marginLeft: 8,
+                              color: "#8B9AC0",
+                              fontWeight: 400,
+                              fontSize: 12,
                             }}
                           >
-                            {ex.code}
+                            ({es.courseCode})
                           </span>
                         )}
+                      </div>
+                      {es.venue && (
                         <div
                           style={{
-                            fontSize: 11,
-                            color: "#8B95B0",
+                            fontSize: 12,
+                            color: "#8B9AC0",
                             marginTop: 2,
                           }}
                         >
-                          {ex.days.join(", ")} · {ex.time}
-                          {ex.venue && (
-                            <span style={{ color: "#6B7590" }}>
-                              {" "}
-                              · {ex.venue}
-                            </span>
-                          )}
+                          📍 {es.venue}
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          saveExtraSlots(
-                            extraSlots.filter((e) => e.id !== ex.id),
-                          )
-                        }
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#FF7A59",
-                          cursor: "pointer",
-                          fontSize: 18,
-                          opacity: 0.8,
-                        }}
+                      )}
+                      <div
+                        style={{ fontSize: 12, color: "#8B9AC0", marginTop: 2 }}
                       >
-                        ×
-                      </button>
+                        🕕 {es.startTime} – {es.endTime}
+                        {es.days.length > 0 && (
+                          <span style={{ marginLeft: 8 }}>
+                            {es.days.join(", ")}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                  {!showExtraForm ? (
                     <motion.button
-                      whileTap={{ scale: 0.97 }}
-                      className="glass-btn-accent"
-                      style={{
-                        fontSize: 13,
-                        padding: "9px 20px",
-                        marginTop: 4,
-                      }}
-                      onClick={() => setShowExtraForm(true)}
+                      data-ocid={`timetable.evening.delete_button.${idx + 1}`}
+                      whileTap={{ scale: 0.95 }}
+                      className="glass-btn glass-btn-red"
+                      style={{ padding: "4px 12px", fontSize: 12 }}
+                      onClick={() =>
+                        setEveningSlots((prev) =>
+                          prev.filter((s) => s.id !== es.id),
+                        )
+                      }
                     >
-                      + Add Extra Slot
+                      Remove
                     </motion.button>
-                  ) : (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 10,
-                      }}
-                    >
-                      <div>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#6B7590",
-                            display: "block",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Course Name *
-                        </span>
-                        <input
-                          value={exName}
-                          onChange={(e) => setExName(e.target.value)}
-                          placeholder="e.g. Happiness of Living"
-                          className="glass-input"
-                          style={{ width: "100%", boxSizing: "border-box" }}
-                        />
-                      </div>
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <div style={{ flex: 1 }}>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#6B7590",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Course Code
-                          </span>
-                          <input
-                            value={exCode}
-                            onChange={(e) => setExCode(e.target.value)}
-                            placeholder="e.g. HS3010"
-                            className="glass-input"
-                            style={{ width: "100%", boxSizing: "border-box" }}
-                          />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#6B7590",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Venue
-                          </span>
-                          <input
-                            value={exVenue}
-                            onChange={(e) => setExVenue(e.target.value)}
-                            placeholder="e.g. CLT"
-                            className="glass-input"
-                            style={{ width: "100%", boxSizing: "border-box" }}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#6B7590",
-                            display: "block",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Time
-                        </span>
-                        <input
-                          value={exTime}
-                          onChange={(e) => setExTime(e.target.value)}
-                          placeholder="e.g. 18:00–20:00"
-                          className="glass-input"
-                          style={{ width: "100%", boxSizing: "border-box" }}
-                        />
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#6B7590",
-                            display: "block",
-                            marginBottom: 6,
-                          }}
-                        >
-                          Days
-                        </span>
-                        <div
-                          style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
-                        >
-                          {DAYS.map((day) => (
-                            <span
-                              key={day}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: 12,
-                                color: "#B0BAD0",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={exDays.includes(day)}
-                                onChange={(e) =>
-                                  setExDays(
-                                    e.target.checked
-                                      ? [...exDays, day]
-                                      : exDays.filter((d) => d !== day),
-                                  )
-                                }
-                                style={{ accentColor: "#8b5cf6" }}
-                              />
-                              {day.slice(0, 3)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#6B7590",
-                            display: "block",
-                            marginBottom: 6,
-                          }}
-                        >
-                          Color
-                        </span>
-                        <div
-                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
-                        >
-                          {PASTEL_COLORS.map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={() => setExColor(c)}
-                              style={{
-                                width: 24,
-                                height: 24,
-                                borderRadius: "50%",
-                                background: c,
-                                border:
-                                  exColor === c
-                                    ? "2px solid #fff"
-                                    : "2px solid transparent",
-                                cursor: "pointer",
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                        <motion.button
-                          whileTap={{ scale: 0.97 }}
-                          className="btn-gradient"
-                          style={{ fontSize: 13, padding: "9px 20px" }}
-                          onClick={() => {
-                            if (!exName.trim()) return;
-                            saveExtraSlots([
-                              ...extraSlots,
-                              {
-                                id: Date.now().toString(),
-                                name: exName.trim(),
-                                code: exCode.trim(),
-                                venue: exVenue.trim(),
-                                days: exDays,
-                                time: exTime.trim() || "18:00–20:00",
-                                color: exColor,
-                              },
-                            ]);
-                            setExName("");
-                            setExCode("");
-                            setExVenue("");
-                            setExDays(["Monday"]);
-                            setExTime("18:00–20:00");
-                            setExColor(PASTEL_COLORS[4] ?? "#a78bfa");
-                            setShowExtraForm(false);
-                          }}
-                        >
-                          Add
-                        </motion.button>
-                        <motion.button
-                          whileTap={{ scale: 0.97 }}
-                          className="glass-btn"
-                          style={{ fontSize: 13, padding: "9px 20px" }}
-                          onClick={() => setShowExtraForm(false)}
-                        >
-                          Cancel
-                        </motion.button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+                  </div>
+                ))}
+              </div>
             )}
-          </AnimatePresence>
-        </GlassCard>
-      </div>
+          </div>
+        )}
+      </GlassCard>
 
       {/* Course Cards */}
       <GlassCard className="print-hide" style={{ marginBottom: 16 }}>
