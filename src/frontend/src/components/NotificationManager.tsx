@@ -4,9 +4,11 @@ import type {
   AttendanceRecord,
   Course,
   ExamEntry,
+  NotificationPrefs,
   SemSettings,
   Task,
 } from "../types";
+import { DEFAULT_NOTIFICATION_PREFS } from "../types";
 import { calcAttendance } from "../utils/attendance";
 import { SLOT_OCCURRENCES } from "../utils/slots";
 
@@ -16,6 +18,7 @@ interface Props {
   tasks: Task[];
   examEntries?: ExamEntry[];
   semSettings?: SemSettings;
+  notificationPrefs?: NotificationPrefs;
 }
 
 const isIOS =
@@ -35,6 +38,7 @@ function buildSchedule(
   courses: Course[],
   tasks: Task[],
   examEntries: ExamEntry[],
+  prefs: NotificationPrefs = DEFAULT_NOTIFICATION_PREFS,
 ): Array<{ tag: string; title: string; body: string; scheduledAt: string }> {
   const now = new Date();
   const notifications: Array<{
@@ -88,94 +92,98 @@ function buildSchedule(
     }
   }
 
-  notifications.push({
-    tag: `daily-summary-${summaryDateStr}`,
-    title: "InstiFlow — Good Morning 📚",
-    body: summaryBody.trim() || "Have a great day!",
-    scheduledAt: toISO(dailySummaryDate),
-  });
+  if (prefs.morningClassSummary) {
+    notifications.push({
+      tag: `daily-summary-${summaryDateStr}`,
+      title: "InstiFlow — Good Morning 📚",
+      body: summaryBody.trim() || "Have a great day!",
+      scheduledAt: toISO(dailySummaryDate),
+    });
+  }
 
   // ── Exam alerts (1 week, 3 days, 1 day before) ──────────────────────────────
-  for (const ex of examEntries) {
-    const course = courses.find((c) => c.id === ex.courseId);
-    if (!course || !ex.date) continue;
-    const examDate = new Date(`${ex.date}T09:00:00`);
-    const examLabel =
-      ex.examType === "quiz1"
-        ? "Quiz 1"
-        : ex.examType === "quiz2"
-          ? "Quiz 2"
-          : "End Sem";
-    const dateDisplay = examDate.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-    });
-    const body = `${course.name} ${examLabel} on ${dateDisplay}`;
+  if (prefs.examAlerts)
+    for (const ex of examEntries) {
+      const course = courses.find((c) => c.id === ex.courseId);
+      if (!course || !ex.date) continue;
+      const examDate = new Date(`${ex.date}T09:00:00`);
+      const examLabel =
+        ex.examType === "quiz1"
+          ? "Quiz 1"
+          : ex.examType === "quiz2"
+            ? "Quiz 2"
+            : "End Sem";
+      const dateDisplay = examDate.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+      });
+      const body = `${course.name} ${examLabel} on ${dateDisplay}`;
 
-    const offsets: Array<{ days: number; label: string; emoji: string }> = [
-      { days: 7, label: "Exam in 1 Week ⏰", emoji: "⏰" },
-      { days: 3, label: "Exam in 3 Days ⚠️", emoji: "⚠️" },
-      { days: 1, label: "Exam Tomorrow 🔴", emoji: "🔴" },
-    ];
+      const offsets: Array<{ days: number; label: string; emoji: string }> = [
+        { days: 7, label: "Exam in 1 Week ⏰", emoji: "⏰" },
+        { days: 3, label: "Exam in 3 Days ⚠️", emoji: "⚠️" },
+        { days: 1, label: "Exam Tomorrow 🔴", emoji: "🔴" },
+      ];
 
-    for (const { days, label } of offsets) {
-      const alertTime = new Date(examDate);
-      alertTime.setDate(alertTime.getDate() - days);
-      alertTime.setHours(8, 0, 0, 0);
-      if (alertTime > now) {
+      for (const { days, label } of offsets) {
+        const alertTime = new Date(examDate);
+        alertTime.setDate(alertTime.getDate() - days);
+        alertTime.setHours(8, 0, 0, 0);
+        if (alertTime > now) {
+          notifications.push({
+            tag: `exam-${ex.id}-${days}d`,
+            title: `InstiFlow — ${label}`,
+            body,
+            scheduledAt: toISO(alertTime),
+          });
+        }
+      }
+    }
+
+  // ── Task alerts ───────────────────────────────────────────────────────────
+  if (prefs.taskAlerts)
+    for (const t of tasks) {
+      if (t.completed || !t.date) continue;
+      const dueDate = new Date(`${t.date}T09:00:00`);
+
+      // 1 day before at 8 AM
+      const dayBefore = new Date(dueDate);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      dayBefore.setHours(8, 0, 0, 0);
+      if (dayBefore > now) {
         notifications.push({
-          tag: `exam-${ex.id}-${days}d`,
-          title: `InstiFlow — ${label}`,
-          body,
-          scheduledAt: toISO(alertTime),
+          tag: `task-before-${t.id}`,
+          title: "InstiFlow — Task Due Tomorrow 📋",
+          body: t.title,
+          scheduledAt: toISO(dayBefore),
+        });
+      }
+
+      // Due date at 9 AM
+      const dueDayAlert = new Date(dueDate);
+      dueDayAlert.setHours(9, 0, 0, 0);
+      if (dueDayAlert > now) {
+        notifications.push({
+          tag: `task-due-${t.id}`,
+          title: "InstiFlow — Task Due Today 🔔",
+          body: t.title,
+          scheduledAt: toISO(dueDayAlert),
+        });
+      }
+
+      // Overdue: day after at 8 AM
+      const overdue = new Date(dueDate);
+      overdue.setDate(overdue.getDate() + 1);
+      overdue.setHours(8, 0, 0, 0);
+      if (overdue > now) {
+        notifications.push({
+          tag: `task-overdue-${t.id}`,
+          title: "InstiFlow — Overdue Task ❗",
+          body: t.title,
+          scheduledAt: toISO(overdue),
         });
       }
     }
-  }
-
-  // ── Task alerts ───────────────────────────────────────────────────────────
-  for (const t of tasks) {
-    if (t.completed || !t.date) continue;
-    const dueDate = new Date(`${t.date}T09:00:00`);
-
-    // 1 day before at 8 AM
-    const dayBefore = new Date(dueDate);
-    dayBefore.setDate(dayBefore.getDate() - 1);
-    dayBefore.setHours(8, 0, 0, 0);
-    if (dayBefore > now) {
-      notifications.push({
-        tag: `task-before-${t.id}`,
-        title: "InstiFlow — Task Due Tomorrow 📋",
-        body: t.title,
-        scheduledAt: toISO(dayBefore),
-      });
-    }
-
-    // Due date at 9 AM
-    const dueDayAlert = new Date(dueDate);
-    dueDayAlert.setHours(9, 0, 0, 0);
-    if (dueDayAlert > now) {
-      notifications.push({
-        tag: `task-due-${t.id}`,
-        title: "InstiFlow — Task Due Today 🔔",
-        body: t.title,
-        scheduledAt: toISO(dueDayAlert),
-      });
-    }
-
-    // Overdue: day after at 8 AM
-    const overdue = new Date(dueDate);
-    overdue.setDate(overdue.getDate() + 1);
-    overdue.setHours(8, 0, 0, 0);
-    if (overdue > now) {
-      notifications.push({
-        tag: `task-overdue-${t.id}`,
-        title: "InstiFlow — Overdue Task ❗",
-        body: t.title,
-        scheduledAt: toISO(overdue),
-      });
-    }
-  }
 
   return notifications;
 }
@@ -186,6 +194,7 @@ export function NotificationManager({
   tasks,
   examEntries = [],
   semSettings: _semSettings,
+  notificationPrefs = DEFAULT_NOTIFICATION_PREFS,
 }: Props) {
   const firedRef = useRef<Set<string>>(new Set());
   const [showIOSBanner, setShowIOSBanner] = useState(false);
@@ -213,14 +222,20 @@ export function NotificationManager({
     if (permission !== "granted") return;
     if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
 
-    const schedule = buildSchedule(courses, tasks, examEntries);
+    const schedule = buildSchedule(
+      courses,
+      tasks,
+      examEntries,
+      notificationPrefs,
+    );
     navigator.serviceWorker.ready.then((reg) => {
       reg.active?.postMessage({
         type: "SCHEDULE_NOTIFICATIONS",
         notifications: schedule,
       });
     });
-  }, [courses, tasks, examEntries, permission]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: notificationPrefs handled
+  }, [courses, tasks, examEntries, permission, notificationPrefs]);
 
   // ── In-app foreground notifications (interval-based) ─────────────────────────
   useEffect(() => {
@@ -236,51 +251,57 @@ export function NotificationManager({
       const iitmDay = todayDay - 1;
 
       if (h === 7 && m < 5) {
-        const todayCourses = courses.filter((c) => {
-          const occs = SLOT_OCCURRENCES[c.slot] ?? [];
-          return occs.some((o) => o.day === iitmDay);
-        });
-        for (const c of todayCourses) {
-          const key = `class-${today}-${c.id}`;
-          if (!firedRef.current.has(key)) {
-            firedRef.current.add(key);
-            new Notification("InstiFlow — Class Today 📚", {
-              body: `${c.name} (Slot ${c.slot})${
-                c.venue ? ` · ${c.venue}` : ""
-              }`,
-              icon: "/icons/icon-192.png",
-            });
-          }
-        }
-
-        for (const c of courses) {
-          const stats = calcAttendance(attendance, c.id);
-          if (stats.percentage < 75 && stats.total > 0) {
-            const key = `attn-warn-${today}-${c.id}`;
+        if (notificationPrefs.morningClassSummary) {
+          const todayCourses = courses.filter((c) => {
+            const occs = SLOT_OCCURRENCES[c.slot] ?? [];
+            return occs.some((o) => o.day === iitmDay);
+          });
+          for (const c of todayCourses) {
+            const key = `class-${today}-${c.id}`;
             if (!firedRef.current.has(key)) {
               firedRef.current.add(key);
-              new Notification("InstiFlow — Attendance Warning ⚠️", {
-                body: `${c.name}: ${stats.percentage}% (need ${stats.toReach75} more classes)`,
+              new Notification("InstiFlow — Class Today 📚", {
+                body: `${c.name} (Slot ${c.slot})${
+                  c.venue ? ` · ${c.venue}` : ""
+                }`,
                 icon: "/icons/icon-192.png",
               });
             }
           }
         }
 
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split("T")[0];
-        for (const t of tasks) {
-          if (t.completed) continue;
-          if (t.date === today || t.date === tomorrowStr) {
-            const key = `task-${today}-${t.id}`;
-            if (!firedRef.current.has(key)) {
-              firedRef.current.add(key);
-              const label = t.date === today ? "Due Today" : "Due Tomorrow";
-              new Notification(`InstiFlow — Task ${label} 📋`, {
-                body: t.title,
-                icon: "/icons/icon-192.png",
-              });
+        if (notificationPrefs.attendanceAlerts) {
+          for (const c of courses) {
+            const stats = calcAttendance(attendance, c.id);
+            if (stats.percentage < 75 && stats.total > 0) {
+              const key = `attn-warn-${today}-${c.id}`;
+              if (!firedRef.current.has(key)) {
+                firedRef.current.add(key);
+                new Notification("InstiFlow — Attendance Warning ⚠️", {
+                  body: `${c.name}: ${stats.percentage}% (need ${stats.toReach75} more classes)`,
+                  icon: "/icons/icon-192.png",
+                });
+              }
+            }
+          }
+        }
+
+        if (notificationPrefs.taskAlerts) {
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split("T")[0];
+          for (const t of tasks) {
+            if (t.completed) continue;
+            if (t.date === today || t.date === tomorrowStr) {
+              const key = `task-${today}-${t.id}`;
+              if (!firedRef.current.has(key)) {
+                firedRef.current.add(key);
+                const label = t.date === today ? "Due Today" : "Due Tomorrow";
+                new Notification(`InstiFlow — Task ${label} 📋`, {
+                  body: t.title,
+                  icon: "/icons/icon-192.png",
+                });
+              }
             }
           }
         }
@@ -290,7 +311,8 @@ export function NotificationManager({
     check();
     const interval = setInterval(check, 60000);
     return () => clearInterval(interval);
-  }, [courses, attendance, tasks]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: notificationPrefs handled
+  }, [courses, attendance, tasks, notificationPrefs]);
 
   return (
     <>

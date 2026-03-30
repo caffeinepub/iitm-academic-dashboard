@@ -37,3 +37,27 @@ export interface ExamEntry {
   date: string;
   custom?: boolean;
 }
+
+export interface NotificationPrefs {
+  morningClassSummary: boolean;
+  examAlerts: boolean;
+  taskAlerts: boolean;
+  attendanceAlerts: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  morningClassSummary: true,
+  examAlerts: true,
+  taskAlerts: true,
+  attendanceAlerts: true,
+};
+
+export interface EveningSlot {
+  id: string;
+  name: string;
+  venue?: string;
+  days: number[]; // 0=Mon..4=Fri
+  startTime: string; // HH:MM
+  endTime: string;
+  color?: string;
+}

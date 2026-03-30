@@ -83,6 +83,9 @@ export default function App() {
             courses={data.courses}
             onAddCourse={data.addCourse}
             onDeleteCourse={data.deleteCourse}
+            eveningSlots={data.eveningSlots}
+            onAddEveningSlot={data.addEveningSlot}
+            onDeleteEveningSlot={data.deleteEveningSlot}
           />
         );
       case "attendance":
@@ -129,6 +132,8 @@ export default function App() {
             onUpdateSem={data.setSemSettings}
             studentName={data.studentName}
             onUpdateName={data.setStudentName}
+            notificationPrefs={data.notificationPrefs}
+            onUpdateNotifPrefs={data.setNotificationPrefs}
           />
         );
       default:
@@ -193,6 +198,7 @@ export default function App() {
                 tasks={data.tasks}
                 examEntries={data.examEntries}
                 semSettings={data.semSettings}
+                notificationPrefs={data.notificationPrefs}
               />
               <motion.div
                 onMouseMove={handleMouseMove}

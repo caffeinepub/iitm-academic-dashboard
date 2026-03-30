@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { GlassCard } from "../components/GlassCard";
+import type { NotificationPrefs } from "../types";
 import type { SemSettings } from "../types";
 import { autoDetectSem } from "../utils/semester";
 
@@ -8,6 +9,8 @@ interface Props {
   onUpdateSem: (s: SemSettings) => void;
   studentName: string;
   onUpdateName: (n: string) => void;
+  notificationPrefs: NotificationPrefs;
+  onUpdateNotifPrefs: (p: NotificationPrefs) => void;
 }
 
 export function SettingsView({
@@ -15,6 +18,8 @@ export function SettingsView({
   onUpdateSem,
   studentName,
   onUpdateName,
+  notificationPrefs,
+  onUpdateNotifPrefs,
 }: Props) {
   const clearAll = () => {
     if (
@@ -202,6 +207,144 @@ export function SettingsView({
           Clear All Data
         </motion.button>
       </GlassCard>
+
+      {/* Notification Preferences */}
+      <GlassCard style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "#606880",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            marginBottom: 14,
+            fontWeight: 600,
+          }}
+        >
+          Notifications
+        </div>
+        {(
+          [
+            {
+              key: "morningClassSummary",
+              label: "Morning Class Summary",
+              desc: "7 AM daily class rundown",
+            },
+            {
+              key: "examAlerts",
+              label: "Exam Alerts",
+              desc: "1 week, 3 days, 1 day before exams",
+            },
+            {
+              key: "taskAlerts",
+              label: "Task Alerts",
+              desc: "Reminders for due & upcoming tasks",
+            },
+            {
+              key: "attendanceAlerts",
+              label: "Attendance Warnings",
+              desc: "Alert when below 75%",
+            },
+          ] as Array<{
+            key: keyof NotificationPrefs;
+            label: string;
+            desc: string;
+          }>
+        ).map(({ key, label, desc }) => (
+          <div
+            key={key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 0",
+              borderBottom: "1px solid rgba(255,255,255,0.05)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, color: "#D0D5F0", fontWeight: 600 }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 11, color: "#606880", marginTop: 2 }}>
+                {desc}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateNotifPrefs({
+                  ...notificationPrefs,
+                  [key]: !notificationPrefs[key],
+                })
+              }
+              style={{
+                position: "relative",
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                border: "none",
+                cursor: "pointer",
+                background: notificationPrefs[key]
+                  ? "linear-gradient(90deg, #8b5cf6, #3b82f6)"
+                  : "rgba(255,255,255,0.1)",
+                transition: "background 0.3s",
+                flexShrink: 0,
+              }}
+              aria-label={`Toggle ${label}`}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: notificationPrefs[key] ? 22 : 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                  transition: "left 0.25s cubic-bezier(0.25,0.46,0.45,0.94)",
+                  display: "block",
+                }}
+              />
+            </button>
+          </div>
+        ))}
+      </GlassCard>
+
+      {/* Footer credit */}
+      <div
+        style={{
+          textAlign: "center",
+          padding: "20px 0 8px",
+          fontSize: 12,
+          color: "rgba(160,170,220,0.55)",
+          letterSpacing: "0.04em",
+          lineHeight: 1.6,
+        }}
+      >
+        <span
+          style={{
+            background: "linear-gradient(90deg, #a78bfa, #60a5fa)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            fontWeight: 700,
+            fontSize: 13,
+          }}
+        >
+          Created by Bharath · BE24
+        </span>
+        <br />
+        <span style={{ opacity: 0.7 }}>Powered by </span>
+        <span
+          style={{
+            background: "linear-gradient(90deg, #f59e0b, #ef4444)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            fontWeight: 700,
+          }}
+        >
+          IITM BAZAAR
+        </span>
+      </div>
     </motion.div>
   );
 }
