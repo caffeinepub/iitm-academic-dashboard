@@ -390,6 +390,350 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
         </div>
       </div>
 
+      {/* ─── Section B: Manual Override ──────────────────────────────────── */}
+      <div style={{ marginBottom: 16 }} className="print-hide">
+        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+          <button
+            type="button"
+            onClick={() => setShowOverrideSection(!showOverrideSection)}
+            style={{
+              width: "100%",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "16px 20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "inherit",
+            }}
+            data-ocid="timetable.override.toggle"
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#F0F4FF" }}>
+                Manual Override
+              </span>
+              <span style={{ fontSize: 12, color: "#6B7590" }}>
+                Add an override for a particular day-slot.
+              </span>
+            </div>
+            <span
+              style={{
+                color: "#6B7590",
+                fontSize: 18,
+                transition: "transform 0.2s",
+                transform: showOverrideSection
+                  ? "rotate(180deg)"
+                  : "rotate(0deg)",
+              }}
+            >
+              ▾
+            </span>
+          </button>
+
+          <AnimatePresence initial={false}>
+            {showOverrideSection && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{ overflow: "hidden" }}
+              >
+                <div style={{ padding: "0 20px 20px" }}>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "#4A5270",
+                      fontStyle: "italic",
+                      marginBottom: 14,
+                    }}
+                  >
+                    Leave the name field blank to delete the particular day-slot
+                    override.
+                  </p>
+
+                  {/* Override list */}
+                  {overrides.length > 0 && (
+                    <div
+                      style={{
+                        marginBottom: 14,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {overrides.map((ov, i) => (
+                        <div
+                          key={ov.id}
+                          data-ocid={`timetable.item.${i + 1}`}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "8px 12px",
+                            background: "rgba(167,139,250,0.08)",
+                            border: "1px solid rgba(167,139,250,0.2)",
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                        >
+                          <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+                            {ov.day}
+                          </span>
+                          <span style={{ color: "#6B7590" }}>Slot</span>
+                          <span style={{ color: "#818cf8", fontWeight: 700 }}>
+                            {ov.slot}
+                          </span>
+                          <span style={{ color: "#6B7590" }}>→</span>
+                          <span style={{ color: "#F0F4FF", flex: 1 }}>
+                            {ov.name || (
+                              <em style={{ color: "#4A5270" }}>deleted</em>
+                            )}
+                          </span>
+                          <motion.button
+                            data-ocid={`timetable.delete_button.${i + 1}`}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() =>
+                              saveOverrides(
+                                overrides.filter((o) => o.id !== ov.id),
+                              )
+                            }
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#FF7A59",
+                              cursor: "pointer",
+                              fontSize: 14,
+                              opacity: 0.7,
+                            }}
+                          >
+                            ×
+                          </motion.button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Override form */}
+                  <AnimatePresence>
+                    {showOverrideForm && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        style={{ overflow: "hidden", marginBottom: 12 }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            padding: "12px",
+                            background: "rgba(255,255,255,0.04)",
+                            borderRadius: 10,
+                            border: "1px solid rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          <select
+                            className="glass-input"
+                            style={{ flex: "1 1 130px", fontSize: 12 }}
+                            value={ovDay}
+                            onChange={(e) => setOvDay(e.target.value)}
+                          >
+                            {DAYS.map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="glass-input"
+                            style={{ flex: "1 1 100px", fontSize: 12 }}
+                            value={ovSlot}
+                            onChange={(e) => setOvSlot(e.target.value)}
+                          >
+                            {ALL_SLOTS.map((s) => (
+                              <option key={s} value={s}>
+                                Slot {s}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            className="glass-input"
+                            style={{ flex: "2 1 180px", fontSize: 12 }}
+                            placeholder="Override name (blank = delete slot)"
+                            value={ovName}
+                            onChange={(e) => setOvName(e.target.value)}
+                          />
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            className="btn-gradient"
+                            style={{ fontSize: 12, padding: "8px 16px" }}
+                            onClick={handleAddOverride}
+                          >
+                            Save Override
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <motion.button
+                      data-ocid="timetable.override.primary_button"
+                      whileTap={{ scale: 0.97 }}
+                      className="glass-btn-accent"
+                      style={{ fontSize: 12, padding: "8px 16px" }}
+                      onClick={() => setShowOverrideForm(!showOverrideForm)}
+                    >
+                      {showOverrideForm ? "✕ Cancel" : "+ Add Override"}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="glass-btn"
+                      style={{
+                        fontSize: 12,
+                        padding: "8px 16px",
+                        color: "rgba(255,122,89,0.85)",
+                      }}
+                      onClick={() => saveOverrides([])}
+                    >
+                      Clear Overrides
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </GlassCard>
+      </div>
+
+      {/* ─── Section C: Save / Load ──────────────────────────────────────── */}
+      <div style={{ marginBottom: 16 }} className="print-hide">
+        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
+          <button
+            type="button"
+            onClick={() => setShowSaveLoad(!showSaveLoad)}
+            style={{
+              width: "100%",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "16px 20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "inherit",
+            }}
+            data-ocid="timetable.saveload.toggle"
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#F0F4FF" }}>
+                Save / Load Previously Generated Data
+              </span>
+              <span style={{ fontSize: 12, color: "#6B7590" }}>
+                Save your current calendar or load a previously saved calendar.
+              </span>
+            </div>
+            <span
+              style={{
+                color: "#6B7590",
+                fontSize: 18,
+                transition: "transform 0.2s",
+                transform: showSaveLoad ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            >
+              ▾
+            </span>
+          </button>
+
+          <AnimatePresence initial={false}>
+            {showSaveLoad && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{ overflow: "hidden" }}
+              >
+                <div style={{ padding: "0 20px 20px" }}>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(255,122,89,0.7)",
+                      fontStyle: "italic",
+                      marginBottom: 16,
+                    }}
+                  >
+                    ⚠️ Warning: Making modifications to the downloaded file might
+                    lead to unpredictable results!
+                  </p>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <motion.button
+                      data-ocid="timetable.save.primary_button"
+                      whileTap={{ scale: 0.97 }}
+                      whileHover={{ scale: 1.03 }}
+                      className="glass-btn-accent"
+                      style={{
+                        fontSize: 13,
+                        padding: "10px 24px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                      onClick={handleSaveData}
+                    >
+                      💾 Save Data
+                    </motion.button>
+                    <motion.button
+                      data-ocid="timetable.load.secondary_button"
+                      whileTap={{ scale: 0.97 }}
+                      whileHover={{ scale: 1.03 }}
+                      className="glass-btn"
+                      style={{
+                        fontSize: 13,
+                        padding: "10px 24px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      📂 Load Data
+                    </motion.button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json"
+                      style={{ display: "none" }}
+                      onChange={handleLoadData}
+                    />
+                  </div>
+                  <p style={{ fontSize: 11, color: "#4A5270", marginTop: 12 }}>
+                    Saved file includes all your courses and slot overrides.
+                    Load it on any device running InstiFlow.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </GlassCard>
+      </div>
       {/* ─── Section A: Add Slot ─────────────────────────────────────────── */}
       <div style={{ marginBottom: 16 }} className="print-hide">
         <GlassCard style={{ padding: 0, overflow: "hidden" }}>
@@ -697,348 +1041,6 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
         </GlassCard>
       </div>
 
-      {/* ─── Section B: Manual Override ──────────────────────────────────── */}
-      <div style={{ marginBottom: 16 }} className="print-hide">
-        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
-          <button
-            type="button"
-            onClick={() => setShowOverrideSection(!showOverrideSection)}
-            style={{
-              width: "100%",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "16px 20px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontFamily: "inherit",
-            }}
-            data-ocid="timetable.override.toggle"
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 3,
-                textAlign: "left",
-              }}
-            >
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#F0F4FF" }}>
-                Manual Override
-              </span>
-              <span style={{ fontSize: 12, color: "#6B7590" }}>
-                Add an override for a particular day-slot.
-              </span>
-            </div>
-            <span
-              style={{
-                color: "#6B7590",
-                fontSize: 18,
-                transition: "transform 0.2s",
-                transform: showOverrideSection
-                  ? "rotate(180deg)"
-                  : "rotate(0deg)",
-              }}
-            >
-              ▾
-            </span>
-          </button>
-
-          <AnimatePresence initial={false}>
-            {showOverrideSection && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{ overflow: "hidden" }}
-              >
-                <div style={{ padding: "0 20px 20px" }}>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "#4A5270",
-                      fontStyle: "italic",
-                      marginBottom: 14,
-                    }}
-                  >
-                    Leave the name field blank to delete the particular day-slot
-                    override.
-                  </p>
-
-                  {/* Override list */}
-                  {overrides.length > 0 && (
-                    <div
-                      style={{
-                        marginBottom: 14,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                      }}
-                    >
-                      {overrides.map((ov, i) => (
-                        <div
-                          key={ov.id}
-                          data-ocid={`timetable.item.${i + 1}`}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "8px 12px",
-                            background: "rgba(167,139,250,0.08)",
-                            border: "1px solid rgba(167,139,250,0.2)",
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                        >
-                          <span style={{ color: "#a78bfa", fontWeight: 700 }}>
-                            {ov.day}
-                          </span>
-                          <span style={{ color: "#6B7590" }}>Slot</span>
-                          <span style={{ color: "#818cf8", fontWeight: 700 }}>
-                            {ov.slot}
-                          </span>
-                          <span style={{ color: "#6B7590" }}>→</span>
-                          <span style={{ color: "#F0F4FF", flex: 1 }}>
-                            {ov.name || (
-                              <em style={{ color: "#4A5270" }}>deleted</em>
-                            )}
-                          </span>
-                          <motion.button
-                            data-ocid={`timetable.delete_button.${i + 1}`}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() =>
-                              saveOverrides(
-                                overrides.filter((o) => o.id !== ov.id),
-                              )
-                            }
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "#FF7A59",
-                              cursor: "pointer",
-                              fontSize: 14,
-                              opacity: 0.7,
-                            }}
-                          >
-                            ×
-                          </motion.button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Override form */}
-                  <AnimatePresence>
-                    {showOverrideForm && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        style={{ overflow: "hidden", marginBottom: 12 }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 10,
-                            flexWrap: "wrap",
-                            padding: "12px",
-                            background: "rgba(255,255,255,0.04)",
-                            borderRadius: 10,
-                            border: "1px solid rgba(255,255,255,0.08)",
-                          }}
-                        >
-                          <select
-                            className="glass-input"
-                            style={{ flex: "1 1 130px", fontSize: 12 }}
-                            value={ovDay}
-                            onChange={(e) => setOvDay(e.target.value)}
-                          >
-                            {DAYS.map((d) => (
-                              <option key={d} value={d}>
-                                {d}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="glass-input"
-                            style={{ flex: "1 1 100px", fontSize: 12 }}
-                            value={ovSlot}
-                            onChange={(e) => setOvSlot(e.target.value)}
-                          >
-                            {ALL_SLOTS.map((s) => (
-                              <option key={s} value={s}>
-                                Slot {s}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            className="glass-input"
-                            style={{ flex: "2 1 180px", fontSize: 12 }}
-                            placeholder="Override name (blank = delete slot)"
-                            value={ovName}
-                            onChange={(e) => setOvName(e.target.value)}
-                          />
-                          <motion.button
-                            whileTap={{ scale: 0.95 }}
-                            className="btn-gradient"
-                            style={{ fontSize: 12, padding: "8px 16px" }}
-                            onClick={handleAddOverride}
-                          >
-                            Save Override
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <motion.button
-                      data-ocid="timetable.override.primary_button"
-                      whileTap={{ scale: 0.97 }}
-                      className="glass-btn-accent"
-                      style={{ fontSize: 12, padding: "8px 16px" }}
-                      onClick={() => setShowOverrideForm(!showOverrideForm)}
-                    >
-                      {showOverrideForm ? "✕ Cancel" : "+ Add Override"}
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.97 }}
-                      className="glass-btn"
-                      style={{
-                        fontSize: 12,
-                        padding: "8px 16px",
-                        color: "rgba(255,122,89,0.85)",
-                      }}
-                      onClick={() => saveOverrides([])}
-                    >
-                      Clear Overrides
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </GlassCard>
-      </div>
-      <div style={{ marginBottom: 16 }} className="print-hide">
-        <GlassCard style={{ padding: 0, overflow: "hidden" }}>
-          <button
-            type="button"
-            onClick={() => setShowSaveLoad(!showSaveLoad)}
-            style={{
-              width: "100%",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "16px 20px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontFamily: "inherit",
-            }}
-            data-ocid="timetable.saveload.toggle"
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 3,
-                textAlign: "left",
-              }}
-            >
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#F0F4FF" }}>
-                Save / Load Previously Generated Data
-              </span>
-              <span style={{ fontSize: 12, color: "#6B7590" }}>
-                Save your current calendar or load a previously saved calendar.
-              </span>
-            </div>
-            <span
-              style={{
-                color: "#6B7590",
-                fontSize: 18,
-                transition: "transform 0.2s",
-                transform: showSaveLoad ? "rotate(180deg)" : "rotate(0deg)",
-              }}
-            >
-              ▾
-            </span>
-          </button>
-
-          <AnimatePresence initial={false}>
-            {showSaveLoad && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{ overflow: "hidden" }}
-              >
-                <div style={{ padding: "0 20px 20px" }}>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(255,122,89,0.7)",
-                      fontStyle: "italic",
-                      marginBottom: 16,
-                    }}
-                  >
-                    ⚠️ Warning: Making modifications to the downloaded file might
-                    lead to unpredictable results!
-                  </p>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    <motion.button
-                      data-ocid="timetable.save.primary_button"
-                      whileTap={{ scale: 0.97 }}
-                      whileHover={{ scale: 1.03 }}
-                      className="glass-btn-accent"
-                      style={{
-                        fontSize: 13,
-                        padding: "10px 24px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                      onClick={handleSaveData}
-                    >
-                      💾 Save Data
-                    </motion.button>
-                    <motion.button
-                      data-ocid="timetable.load.secondary_button"
-                      whileTap={{ scale: 0.97 }}
-                      whileHover={{ scale: 1.03 }}
-                      className="glass-btn"
-                      style={{
-                        fontSize: 13,
-                        padding: "10px 24px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      📂 Load Data
-                    </motion.button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".json"
-                      style={{ display: "none" }}
-                      onChange={handleLoadData}
-                    />
-                  </div>
-                  <p style={{ fontSize: 11, color: "#4A5270", marginTop: 12 }}>
-                    Saved file includes all your courses and slot overrides.
-                    Load it on any device running InstiFlow.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </GlassCard>
-      </div>
       {/* Timetable Grid */}
       <GlassCard style={{ marginBottom: 16, overflowX: "auto" }}>
         <div

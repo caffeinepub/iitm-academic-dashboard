@@ -11,6 +11,31 @@ import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
 export type AcademicData = string;
+export interface Holiday { 'date' : string, 'name' : string }
+export interface SemesterConfig {
+  'id' : string,
+  'semType' : string,
+  'holidays' : Array<Holiday>,
+  'quiz1Start' : string,
+  'name' : string,
+  'year' : bigint,
+  'isActive' : boolean,
+  'slotExamDates' : Array<SlotExamDate>,
+  'endSemStart' : string,
+  'events' : Array<Holiday>,
+  'quiz1End' : string,
+  'quiz2End' : string,
+  'quiz2Start' : string,
+  'endSemEnd' : string,
+  'classStart' : string,
+  'classEnd' : string,
+}
+export interface SlotExamDate {
+  'slot' : string,
+  'quiz1' : string,
+  'quiz2' : string,
+  'endSem' : string,
+}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -18,13 +43,18 @@ export type UserRole = { 'admin' : null } |
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'deleteSemesterConfig' : ActorMethod<[string], undefined>,
+  'getActiveSemesterConfig' : ActorMethod<[], [] | [SemesterConfig]>,
   'getCallerSnapshot' : ActorMethod<[], [] | [AcademicData]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'listSemesterConfigs' : ActorMethod<[], Array<SemesterConfig>>,
   'saveCallerSnapshot' : ActorMethod<[AcademicData], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'saveSemesterConfig' : ActorMethod<[SemesterConfig], undefined>,
+  'setActiveSemester' : ActorMethod<[string], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

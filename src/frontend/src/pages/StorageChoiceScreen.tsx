@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 interface Props {
@@ -21,12 +21,11 @@ export function StorageChoiceScreen({ onChoice }: Props) {
     login();
   };
 
-  useEffect(() => {
-    if (loginStarted && (isLoginSuccess || identity)) {
-      localStorage.setItem("instiflow_storage_choice", "sync");
-      onChoice("sync");
-    }
-  }, [loginStarted, isLoginSuccess, identity, onChoice]);
+  // Once login succeeds, save choice and proceed
+  if (loginStarted && (isLoginSuccess || identity)) {
+    localStorage.setItem("instiflow_storage_choice", "sync");
+    onChoice("sync");
+  }
 
   return (
     <motion.div

@@ -1,23 +1,11 @@
-import {
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Edit2,
-  Loader2,
-  LogIn,
-  Plus,
-  ShieldCheck,
-  Trash2,
-} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
-import type { SemesterConfig } from "../backend.d";
+import { useCallback, useEffect, useState } from "react";
+import type { Holiday, SemesterConfig, SlotExamDate } from "../backend.d";
 import { GlassCard } from "../components/GlassCard";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
-const IITM_SLOTS = [
+const SLOTS = [
   "A",
   "B",
   "C",
@@ -37,12 +25,35 @@ const IITM_SLOTS = [
   "T",
 ];
 
-type FormData = Omit<SemesterConfig, "id" | "isActive">;
+const DEFAULT_SLOT_EXAM_DATES: Record<
+  string,
+  { quiz1: string; quiz2: string; endSem: string }
+> = {
+  A: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-04" },
+  B: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-05" },
+  C: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-05" },
+  D: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-06" },
+  E: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-06" },
+  F: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-07" },
+  G: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-07" },
+  H: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-08" },
+  J: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-09" },
+  K: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-11" },
+  L: { quiz1: "2026-02-16", quiz2: "2026-03-23", endSem: "2026-05-12" },
+  M: { quiz1: "2026-02-17", quiz2: "2026-03-24", endSem: "2026-05-13" },
+  P: { quiz1: "2026-02-18", quiz2: "2026-03-25", endSem: "2026-05-14" },
+  Q: { quiz1: "2026-02-19", quiz2: "2026-03-26", endSem: "2026-05-14" },
+  R: { quiz1: "2026-02-20", quiz2: "2026-03-27", endSem: "2026-05-15" },
+  S: { quiz1: "2026-02-16", quiz2: "2026-03-28", endSem: "2026-05-15" },
+  T: { quiz1: "2026-02-17", quiz2: "2026-03-28", endSem: "2026-05-16" },
+};
 
-function emptyForm(): FormData {
+function emptyForm(): Omit<SemesterConfig, "id" | "year" | "isActive"> & {
+  year: string;
+} {
   return {
-    semName: "",
-    year: BigInt(new Date().getFullYear()),
+    name: "",
+    year: "2026",
     semType: "even",
     classStart: "",
     classEnd: "",
@@ -54,162 +65,109 @@ function emptyForm(): FormData {
     endSemEnd: "",
     holidays: [],
     events: [],
-    slotExamDates: IITM_SLOTS.map((s) => [
-      s,
-      { quiz1: "", quiz2: "", endSem: "" },
-    ]),
+    slotExamDates: SLOTS.map((slot) => ({
+      slot,
+      ...DEFAULT_SLOT_EXAM_DATES[slot],
+    })),
   };
 }
 
-const IS: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: 8,
-  color: "#e2e8f0",
-  padding: "8px 12px",
-  fontSize: 13,
-  outline: "none",
-  width: "100%",
-};
-
-function inputStyle(extra?: React.CSSProperties): React.CSSProperties {
-  return { ...IS, ...extra };
-}
-
-function SectionToggle({
-  label,
-  children,
-  defaultOpen = false,
-}: {
-  label: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: "rgba(99,102,241,0.1)",
-          border: "1px solid rgba(99,102,241,0.2)",
-          borderRadius: 8,
-          padding: "8px 14px",
-          color: "#a5b4fc",
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: "pointer",
-          width: "100%",
-          justifyContent: "space-between",
-        }}
-      >
-        <span>{label}</span>
-        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-      </button>
-      {open && <div style={{ marginTop: 10 }}>{children}</div>}
-    </div>
-  );
-}
-
-const gradBtn: React.CSSProperties = {
-  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-  border: "none",
-  borderRadius: 8,
-  color: "#fff",
-  padding: "9px 18px",
-  fontWeight: 600,
-  fontSize: 13,
-  cursor: "pointer",
-  boxShadow: "0 0 16px rgba(99,102,241,0.4)",
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-};
-
-const outlineBtn: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: 8,
-  color: "#94a3b8",
-  padding: "7px 14px",
-  fontWeight: 500,
-  fontSize: 12,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  gap: 5,
-};
-
-const dangerBtn: React.CSSProperties = {
-  ...outlineBtn,
-  border: "1px solid rgba(239,68,68,0.3)",
-  color: "rgba(239,68,68,0.8)",
-};
-
 export function AdminPanel() {
-  const { actor, isFetching } = useActor();
-  const { login, isLoggingIn, isInitializing, identity } =
+  const { login, clear, loginStatus, identity, isLoggingIn } =
     useInternetIdentity();
+  const { actor, isFetching } = useActor();
 
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checkingAdmin, setCheckingAdmin] = useState(false);
-  const [semesters, setSemesters] = useState<SemesterConfig[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [configs, setConfigs] = useState<SemesterConfig[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm());
+
+  const [adminToken, setAdminToken] = useState("");
+  const [initError, setInitError] = useState("");
+  const [initLoading, setInitLoading] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(
-    null,
-  );
-  const [editMode, setEditMode] = useState<"none" | "add" | "edit">("none");
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormData>(emptyForm());
 
-  useEffect(() => {
+  const isLoggedIn = loginStatus === "success" && !!identity;
+
+  const checkAdmin = useCallback(async () => {
     if (!actor || isFetching) return;
-    if (!identity) {
-      setIsAdmin(false);
-      return;
-    }
     setCheckingAdmin(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (actor as any)
-      .isCallerAdmin()
-      .then((v) => {
-        setIsAdmin(v);
-      })
-      .catch(() => setIsAdmin(false))
-      .finally(() => setCheckingAdmin(false));
-  }, [actor, isFetching, identity]);
+    try {
+      const result = await actor.isCallerAdmin();
+      setIsAdmin(result);
+    } catch {
+      setIsAdmin(false);
+    }
+    setCheckingAdmin(false);
+  }, [actor, isFetching]);
+
+  const loadConfigs = useCallback(async () => {
+    if (!actor || !isAdmin) return;
+    setLoadingConfigs(true);
+    try {
+      const list = await actor.listSemesterConfigs();
+      setConfigs(list);
+    } catch {
+      // ignore
+    }
+    setLoadingConfigs(false);
+  }, [actor, isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin || !actor) return;
-    setLoading(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (actor as any)
-      .getSemesterConfigs()
-      .then(setSemesters)
-      .catch(() => setMsg({ type: "err", text: "Failed to load semesters" }))
-      .finally(() => setLoading(false));
-  }, [isAdmin, actor]);
+    if (isLoggedIn && actor && !isFetching) {
+      checkAdmin();
+    }
+  }, [isLoggedIn, actor, isFetching, checkAdmin]);
 
-  const showMsg = (type: "ok" | "err", text: string) => {
-    setMsg({ type, text });
-    setTimeout(() => setMsg(null), 3500);
+  useEffect(() => {
+    if (isAdmin) loadConfigs();
+  }, [isAdmin, loadConfigs]);
+
+  const handleInitAdmin = async () => {
+    if (!actor || !adminToken.trim()) return;
+    setInitLoading(true);
+    setInitError("");
+    try {
+      await (actor as any)._initializeAccessControlWithSecret(
+        adminToken.trim(),
+      );
+      await checkAdmin();
+    } catch (e: any) {
+      setInitError(e?.message || "Failed to initialize. Check token.");
+    }
+    setInitLoading(false);
   };
 
-  const openAdd = () => {
+  const handleSetActive = async (id: string) => {
+    if (!actor) return;
+    await actor.setActiveSemester(id);
+    await loadConfigs();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!actor) return;
+    if (!confirm("Delete this semester config?")) return;
+    await actor.deleteSemesterConfig(id);
+    await loadConfigs();
+  };
+
+  const openNew = () => {
+    setEditingId(null);
     setForm(emptyForm());
-    setEditId(null);
-    setEditMode("add");
+    setSaveError("");
+    setShowForm(true);
   };
 
   const openEdit = (cfg: SemesterConfig) => {
+    setEditingId(cfg.id);
     setForm({
-      semName: cfg.semName,
-      year: cfg.year,
+      name: cfg.name,
+      year: String(Number(cfg.year)),
       semType: cfg.semType,
       classStart: cfg.classStart,
       classEnd: cfg.classEnd,
@@ -219,847 +177,1112 @@ export function AdminPanel() {
       quiz2End: cfg.quiz2End,
       endSemStart: cfg.endSemStart,
       endSemEnd: cfg.endSemEnd,
-      holidays: [...cfg.holidays],
-      events: [...cfg.events],
-      slotExamDates: IITM_SLOTS.map((s) => {
-        const existing = cfg.slotExamDates.find(([k]) => k === s);
-        return [
-          s,
-          existing ? { ...existing[1] } : { quiz1: "", quiz2: "", endSem: "" },
-        ];
-      }),
+      holidays: cfg.holidays,
+      events: cfg.events,
+      slotExamDates:
+        cfg.slotExamDates.length > 0
+          ? cfg.slotExamDates
+          : SLOTS.map((slot) => ({ slot, ...DEFAULT_SLOT_EXAM_DATES[slot] })),
     });
-    setEditId(cfg.id);
-    setEditMode("edit");
+    setSaveError("");
+    setShowForm(true);
   };
 
   const handleSave = async () => {
     if (!actor) return;
+    if (!form.name.trim()) {
+      setSaveError("Semester name is required.");
+      return;
+    }
     setSaving(true);
+    setSaveError("");
     try {
+      const id = editingId || `${form.semType}-${form.year}-${Date.now()}`;
       const config: SemesterConfig = {
-        id: editId ?? crypto.randomUUID(),
-        ...form,
-        isActive:
-          editMode === "edit"
-            ? (semesters.find((s) => s.id === editId)?.isActive ?? false)
-            : false,
+        id,
+        name: form.name,
+        year: BigInt(form.year || "2026"),
+        semType: form.semType,
+        classStart: form.classStart,
+        classEnd: form.classEnd,
+        quiz1Start: form.quiz1Start,
+        quiz1End: form.quiz1End,
+        quiz2Start: form.quiz2Start,
+        quiz2End: form.quiz2End,
+        endSemStart: form.endSemStart,
+        endSemEnd: form.endSemEnd,
+        holidays: form.holidays,
+        events: form.events,
+        slotExamDates: form.slotExamDates,
+        isActive: false,
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (actor as any).saveSemesterConfig(config);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updated = await (actor as any).getSemesterConfigs();
-      setSemesters(updated);
-      setEditMode("none");
-      showMsg("ok", "Semester saved successfully!");
-    } catch (e) {
-      showMsg(
-        "err",
-        `Save failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    } finally {
-      setSaving(false);
+      await actor.saveSemesterConfig(config);
+      await loadConfigs();
+      setShowForm(false);
+    } catch (e: any) {
+      setSaveError(e?.message || "Save failed.");
     }
+    setSaving(false);
   };
 
-  const handleSetActive = async (id: string) => {
-    if (!actor) return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (actor as any).setActiveSemester(id);
-      setSemesters((prev) =>
-        prev.map((s) => ({ ...s, isActive: s.id === id })),
-      );
-      showMsg("ok", "Active semester updated!");
-    } catch (_) {
-      showMsg("err", "Failed to set active semester");
-    }
-  };
-
-  const handleDelete = async (id: string, name: string) => {
-    if (!actor) return;
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (actor as any).deleteSemesterConfig(id);
-      setSemesters((prev) => prev.filter((s) => s.id !== id));
-      showMsg("ok", "Semester deleted.");
-    } catch (_) {
-      showMsg("err", "Delete failed");
-    }
-  };
-
-  const setField = (key: keyof FormData, val: unknown) =>
-    setForm((prev) => ({ ...prev, [key]: val }));
-
-  const setHoliday = (i: number, field: "date" | "name", val: string) =>
-    setForm((prev) => ({
-      ...prev,
-      holidays: prev.holidays.map((h, j) =>
-        j === i ? { ...h, [field]: val } : h,
-      ),
-    }));
-
-  const addHoliday = () =>
-    setForm((prev) => ({
-      ...prev,
-      holidays: [
-        ...prev.holidays,
-        { date: "", name: "", _id: crypto.randomUUID() },
-      ],
-    }));
-
-  const removeHoliday = (i: number) =>
-    setForm((prev) => ({
-      ...prev,
-      holidays: prev.holidays.filter((_, j) => j !== i),
-    }));
-
-  const setEvent = (
-    i: number,
-    field: "date" | "name" | "eventType",
-    val: string,
-  ) =>
-    setForm((prev) => ({
-      ...prev,
-      events: prev.events.map((e, j) => (j === i ? { ...e, [field]: val } : e)),
-    }));
-
-  const addEvent = () =>
-    setForm((prev) => ({
-      ...prev,
-      events: [
-        ...prev.events,
-        { date: "", name: "", eventType: "festival", _id: crypto.randomUUID() },
-      ],
-    }));
-
-  const removeEvent = (i: number) =>
-    setForm((prev) => ({
-      ...prev,
-      events: prev.events.filter((_, j) => j !== i),
-    }));
-
-  const setSlotDate = (
+  const updateSlotDate = (
     slot: string,
-    field: "quiz1" | "quiz2" | "endSem",
-    val: string,
-  ) =>
-    setForm((prev) => ({
-      ...prev,
-      slotExamDates: prev.slotExamDates.map(([s, d]) =>
-        s === slot ? [s, { ...d, [field]: val }] : [s, d],
+    field: keyof SlotExamDate,
+    value: string,
+  ) => {
+    setForm((f) => ({
+      ...f,
+      slotExamDates: f.slotExamDates.map((s) =>
+        s.slot === slot ? { ...s, [field]: value } : s,
       ),
     }));
+  };
 
-  if (isInitializing || checkingAdmin) {
+  const addHoliday = (type: "holidays" | "events") => {
+    setForm((f) => ({ ...f, [type]: [...f[type], { date: "", name: "" }] }));
+  };
+
+  const updateHoliday = (
+    type: "holidays" | "events",
+    idx: number,
+    field: keyof Holiday,
+    value: string,
+  ) => {
+    setForm((f) => ({
+      ...f,
+      [type]: f[type].map((h, i) => (i === idx ? { ...h, [field]: value } : h)),
+    }));
+  };
+
+  const removeHoliday = (type: "holidays" | "events", idx: number) => {
+    setForm((f) => ({ ...f, [type]: f[type].filter((_, i) => i !== idx) }));
+  };
+
+  // — render states —
+
+  if (!isLoggedIn) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "60vh",
-        }}
-      >
-        <Loader2
-          size={32}
-          className="animate-spin"
-          style={{ color: "#6366f1" }}
-        />
-      </motion.div>
-    );
-  }
-
-  if (!identity) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "60vh",
-        }}
-      >
-        <GlassCard
-          style={{ maxWidth: 440, textAlign: "center", padding: "48px 40px" }}
-        >
-          <ShieldCheck
-            size={48}
-            style={{ color: "#6366f1", margin: "0 auto 20px" }}
-          />
-          <h2
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#e2e8f0",
-              marginBottom: 10,
-            }}
-          >
-            Admin Access Required
-          </h2>
-          <p
-            style={{
-              color: "#64748b",
-              fontSize: 14,
-              marginBottom: 28,
-              lineHeight: 1.6,
-            }}
-          >
-            Login with Internet Identity to access the semester calendar admin
-            panel.
-          </p>
-          <button
-            data-ocid="admin.login_button"
-            type="button"
-            onClick={login}
-            disabled={isLoggingIn}
-            style={gradBtn}
-          >
-            {isLoggingIn ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <LogIn size={16} />
-            )}
-            {isLoggingIn ? "Connecting..." : "Login with Internet Identity"}
-          </button>
-        </GlassCard>
-      </motion.div>
-    );
-  }
-
-  if (isAdmin === false) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "60vh",
-        }}
-      >
-        <GlassCard
-          style={{ maxWidth: 440, textAlign: "center", padding: "48px 40px" }}
-        >
-          <ShieldCheck
-            size={48}
-            style={{ color: "rgba(239,68,68,0.7)", margin: "0 auto 20px" }}
-          />
-          <h2
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: "#e2e8f0",
-              marginBottom: 10,
-            }}
-          >
-            Not Authorized
-          </h2>
-          <p style={{ color: "#64748b", fontSize: 14, lineHeight: 1.6 }}>
-            Your account does not have admin privileges.
-          </p>
-        </GlassCard>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
-      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-      exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      style={{ padding: "32px 28px", maxWidth: 960, margin: "0 auto" }}
-    >
-      {/* Header */}
       <div
         style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 50%, #0a0a14 100%)",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 28,
+          justifyContent: "center",
+          padding: 24,
         }}
       >
-        <div>
-          <h2
-            className="page-heading-gradient"
-            style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}
-          >
-            Admin Panel
-          </h2>
-          <p style={{ color: "#64748b", fontSize: 13 }}>
-            Manage IITM semester calendars — no code changes required
-          </p>
-        </div>
-        <button
-          data-ocid="admin.add_button"
-          type="button"
-          onClick={openAdd}
-          style={gradBtn}
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          style={{ width: "100%", maxWidth: 420 }}
         >
-          <Plus size={16} /> Add Semester
-        </button>
-      </div>
-
-      {/* Toast */}
-      <AnimatePresence>
-        {msg && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            data-ocid="admin.toast"
-            style={{
-              marginBottom: 18,
-              padding: "12px 18px",
-              borderRadius: 10,
-              background:
-                msg.type === "ok"
-                  ? "rgba(34,197,94,0.12)"
-                  : "rgba(239,68,68,0.12)",
-              border: `1px solid ${
-                msg.type === "ok"
-                  ? "rgba(34,197,94,0.3)"
-                  : "rgba(239,68,68,0.3)"
-              }`,
-              color: msg.type === "ok" ? "#4ade80" : "#f87171",
-              fontSize: 13,
-              fontWeight: 500,
-            }}
-          >
-            {msg.text}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Semester List */}
-      {loading ? (
-        <div
-          data-ocid="admin.loading_state"
-          style={{ textAlign: "center", padding: 48 }}
-        >
-          <Loader2
-            size={28}
-            className="animate-spin"
-            style={{ color: "#6366f1" }}
-          />
-        </div>
-      ) : (
-        <div
-          data-ocid="admin.list"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            marginBottom: 24,
-          }}
-        >
-          {semesters.length === 0 && (
-            <div
-              data-ocid="admin.empty_state"
-              style={{
-                color: "#475569",
-                textAlign: "center",
-                padding: "40px 0",
-                fontSize: 14,
-              }}
-            >
-              No semesters configured yet. Click &ldquo;Add Semester&rdquo; to
-              get started.
-            </div>
-          )}
-          {semesters.map((sem, idx) => (
-            <motion.div
-              key={sem.id}
-              data-ocid={`admin.item.${idx + 1}`}
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-            >
-              <GlassCard
+          <GlassCard>
+            <div style={{ textAlign: "center", padding: "12px 0" }}>
+              <div
                 style={{
-                  padding: "16px 20px",
-                  border: sem.isActive
-                    ? "1px solid rgba(99,102,241,0.5)"
-                    : undefined,
-                  boxShadow: sem.isActive
-                    ? "0 0 20px rgba(99,102,241,0.2)"
-                    : undefined,
+                  fontSize: 36,
+                  marginBottom: 16,
+                  filter: "drop-shadow(0 0 16px rgba(99,102,241,0.5))",
                 }}
               >
-                <div
+                🛡️
+              </div>
+              <h1
+                className="page-heading-gradient"
+                style={{ fontSize: 26, fontWeight: 800, marginBottom: 8 }}
+              >
+                Admin Panel
+              </h1>
+              <p
+                style={{
+                  color: "#6B7590",
+                  fontSize: 14,
+                  marginBottom: 28,
+                  lineHeight: 1.6,
+                }}
+              >
+                Manage semester calendar data, holidays, exam windows, and slot
+                schedules for InstiFlow.
+              </p>
+              <motion.button
+                data-ocid="admin.login_button"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="btn-gradient"
+                onClick={login}
+                disabled={isLoggingIn}
+                style={{ width: "100%", padding: "12px 24px", fontSize: 15 }}
+              >
+                {isLoggingIn ? "Connecting…" : "Login with Internet Identity"}
+              </motion.button>
+              <div style={{ marginTop: 16 }}>
+                <a
+                  href="/"
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    flexWrap: "wrap",
+                    color: "#4A5270",
+                    fontSize: 12,
+                    textDecoration: "none",
+                  }}
+                >
+                  ← Back to InstiFlow
+                </a>
+              </div>
+            </div>
+          </GlassCard>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (checkingAdmin || isFetching || isAdmin === null) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 50%, #0a0a14 100%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Number.POSITIVE_INFINITY,
+            duration: 1,
+            ease: "linear",
+          }}
+          style={{
+            width: 40,
+            height: 40,
+            border: "3px solid rgba(99,102,241,0.2)",
+            borderTop: "3px solid #6366f1",
+            borderRadius: "50%",
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 50%, #0a0a14 100%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+        }}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ width: "100%", maxWidth: 480 }}
+        >
+          <GlassCard>
+            <h2
+              className="page-heading-gradient"
+              style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}
+            >
+              Admin Setup
+            </h2>
+            <p style={{ color: "#6B7590", fontSize: 13, marginBottom: 24 }}>
+              Logged in as{" "}
+              <span style={{ color: "#8b5cf6" }}>
+                {identity?.getPrincipal().toString().slice(0, 20)}…
+              </span>
+            </p>
+
+            <div
+              style={{
+                padding: "20px",
+                background: "rgba(99,102,241,0.05)",
+                border: "1px solid rgba(99,102,241,0.15)",
+                borderRadius: 12,
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  color: "#C8D0E8",
+                  fontWeight: 600,
+                  marginBottom: 4,
+                }}
+              >
+                First Time Setup
+              </div>
+              <p
+                style={{
+                  color: "#6B7590",
+                  fontSize: 12,
+                  marginBottom: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                Enter the admin token provided in your deployment settings.
+              </p>
+              <input
+                data-ocid="admin.input"
+                type="password"
+                className="glass-input"
+                placeholder="Admin token"
+                value={adminToken}
+                onChange={(e) => setAdminToken(e.target.value)}
+                style={{ width: "100%", marginBottom: 10, fontSize: 13 }}
+              />
+              {initError && (
+                <div
+                  data-ocid="admin.error_state"
+                  style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}
+                >
+                  {initError}
+                </div>
+              )}
+              <motion.button
+                data-ocid="admin.submit_button"
+                whileTap={{ scale: 0.97 }}
+                className="btn-gradient"
+                onClick={handleInitAdmin}
+                disabled={initLoading || !adminToken.trim()}
+                style={{ fontSize: 13, padding: "8px 20px" }}
+              >
+                {initLoading ? "Initializing…" : "Initialize as Admin"}
+              </motion.button>
+            </div>
+
+            <div
+              style={{
+                padding: "16px",
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 12,
+              }}
+            >
+              <div style={{ fontSize: 13, color: "#6B7590" }}>
+                Already have an admin? Ask the current admin to grant you access
+                via the admin panel.
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                display: "flex",
+                gap: 12,
+                alignItems: "center",
+              }}
+            >
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                className="glass-btn"
+                onClick={clear}
+                style={{ fontSize: 12, padding: "6px 16px" }}
+              >
+                Log Out
+              </motion.button>
+              <a
+                href="/"
+                style={{
+                  color: "#4A5270",
+                  fontSize: 12,
+                  textDecoration: "none",
+                }}
+              >
+                ← Back to InstiFlow
+              </a>
+            </div>
+          </GlassCard>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Full admin UI
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 50%, #0a0a14 100%)",
+        padding: "32px 28px",
+      }}
+    >
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 28,
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div>
+            <h1
+              className="page-heading-gradient"
+              style={{ fontSize: 26, fontWeight: 800, marginBottom: 4 }}
+            >
+              Admin Panel — Semester Manager
+            </h1>
+            <p style={{ color: "#6B7590", fontSize: 13 }}>
+              Logged in as{" "}
+              <span style={{ color: "#8b5cf6" }}>
+                {identity?.getPrincipal().toString().slice(0, 24)}…
+              </span>
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <motion.button
+              data-ocid="admin.primary_button"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="btn-gradient"
+              onClick={openNew}
+              style={{ fontSize: 13, padding: "9px 20px" }}
+            >
+              + Add New Semester
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              className="glass-btn"
+              onClick={clear}
+              style={{ fontSize: 13, padding: "9px 16px" }}
+            >
+              Log Out
+            </motion.button>
+            <a
+              href="/"
+              style={{
+                color: "#4A5270",
+                fontSize: 12,
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              ← App
+            </a>
+          </div>
+        </motion.div>
+
+        {/* Config list */}
+        {loadingConfigs ? (
+          <GlassCard>
+            <div
+              data-ocid="admin.loading_state"
+              style={{ color: "#6B7590", fontSize: 13 }}
+            >
+              Loading semester configs…
+            </div>
+          </GlassCard>
+        ) : configs.length === 0 ? (
+          <GlassCard>
+            <div
+              data-ocid="admin.empty_state"
+              style={{ color: "#4A5270", fontSize: 14 }}
+            >
+              No semester configs yet. Add one using the button above.
+            </div>
+          </GlassCard>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              marginBottom: 24,
+            }}
+          >
+            {configs.map((cfg, i) => (
+              <motion.div
+                key={cfg.id}
+                data-ocid={`admin.item.${i + 1}`}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <GlassCard
+                  style={{
+                    borderColor: cfg.isActive
+                      ? "rgba(34,197,94,0.4)"
+                      : "rgba(255,255,255,0.06)",
+                    boxShadow: cfg.isActive
+                      ? "0 0 24px rgba(34,197,94,0.12), 0 8px 24px rgba(0,0,0,0.4)"
+                      : undefined,
                   }}
                 >
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 12,
+                    }}
                   >
-                    <CalendarDays
-                      size={18}
-                      style={{
-                        color: sem.isActive ? "#818cf8" : "#475569",
-                        flexShrink: 0,
-                      }}
-                    />
                     <div>
                       <div
                         style={{
-                          fontWeight: 600,
-                          fontSize: 15,
-                          color: sem.isActive ? "#c7d2fe" : "#e2e8f0",
                           display: "flex",
                           alignItems: "center",
-                          gap: 8,
+                          gap: 10,
+                          marginBottom: 4,
                         }}
                       >
-                        {sem.semName}
-                        {sem.isActive && (
+                        <span
+                          style={{
+                            fontSize: 16,
+                            fontWeight: 700,
+                            color: "#F0F4FF",
+                          }}
+                        >
+                          {cfg.name}
+                        </span>
+                        {cfg.isActive && (
                           <span
                             style={{
-                              background:
-                                "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                              fontSize: 10,
+                              background: "rgba(34,197,94,0.15)",
+                              border: "1px solid rgba(34,197,94,0.4)",
+                              color: "#4ade80",
                               borderRadius: 6,
                               padding: "2px 8px",
-                              fontSize: 11,
-                              color: "#fff",
                               fontWeight: 700,
+                              boxShadow: "0 0 10px rgba(34,197,94,0.2)",
                             }}
                           >
-                            ACTIVE
+                            ● ACTIVE
                           </span>
                         )}
                       </div>
                       <div
                         style={{
+                          color: "#6B7590",
                           fontSize: 12,
-                          color: "#475569",
-                          marginTop: 2,
+                          display: "flex",
+                          gap: 10,
                         }}
                       >
-                        {sem.semType === "even" ? "Even Sem" : "Odd Sem"}{" "}
-                        &middot; {sem.classStart} → {sem.classEnd} &middot;{" "}
-                        {sem.holidays.length} holidays
+                        <span>
+                          {cfg.semType === "even" ? "Even" : "Odd"} Sem{" "}
+                          {String(Number(cfg.year))}
+                        </span>
+                        <span>·</span>
+                        <span>{cfg.holidays.length} holidays</span>
+                        <span>·</span>
+                        <span>{cfg.events.length} events</span>
                       </div>
                     </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {!sem.isActive && (
-                      <button
-                        data-ocid={`admin.item.${idx + 1}.primary_button`}
-                        type="button"
-                        onClick={() => handleSetActive(sem.id)}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {!cfg.isActive && (
+                        <motion.button
+                          data-ocid={`admin.toggle.${i + 1}`}
+                          whileTap={{ scale: 0.95 }}
+                          className="glass-btn"
+                          onClick={() => handleSetActive(cfg.id)}
+                          style={{
+                            fontSize: 12,
+                            padding: "6px 14px",
+                            color: "#4ade80",
+                            borderColor: "rgba(34,197,94,0.3)",
+                          }}
+                        >
+                          Set Active
+                        </motion.button>
+                      )}
+                      <motion.button
+                        data-ocid={`admin.edit_button.${i + 1}`}
+                        whileTap={{ scale: 0.95 }}
+                        className="glass-btn"
+                        onClick={() => openEdit(cfg)}
+                        style={{ fontSize: 12, padding: "6px 14px" }}
+                      >
+                        Edit
+                      </motion.button>
+                      <motion.button
+                        data-ocid={`admin.delete_button.${i + 1}`}
+                        whileTap={{ scale: 0.95 }}
+                        className="glass-btn"
+                        onClick={() => handleDelete(cfg.id)}
                         style={{
-                          ...outlineBtn,
-                          color: "#818cf8",
-                          border: "1px solid rgba(99,102,241,0.3)",
+                          fontSize: 12,
+                          padding: "6px 14px",
+                          color: "#f87171",
+                          borderColor: "rgba(248,113,113,0.3)",
                         }}
                       >
-                        <CheckCircle2 size={14} /> Set Active
-                      </button>
-                    )}
-                    <button
-                      data-ocid={`admin.item.${idx + 1}.edit_button`}
-                      type="button"
-                      onClick={() => openEdit(sem)}
-                      style={outlineBtn}
-                    >
-                      <Edit2 size={14} /> Edit
-                    </button>
-                    <button
-                      data-ocid={`admin.item.${idx + 1}.delete_button`}
-                      type="button"
-                      onClick={() => handleDelete(sem.id, sem.semName)}
-                      style={dangerBtn}
-                    >
-                      <Trash2 size={14} /> Delete
-                    </button>
+                        Delete
+                      </motion.button>
+                    </div>
                   </div>
-                </div>
-              </GlassCard>
-            </motion.div>
-          ))}
-        </div>
-      )}
+                </GlassCard>
+              </motion.div>
+            ))}
+          </div>
+        )}
 
-      {/* Edit / Add Form */}
-      <AnimatePresence>
-        {editMode !== "none" && (
-          <motion.div
-            data-ocid="admin.dialog"
-            initial={{ opacity: 0, y: 20, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-            transition={{ duration: 0.3 }}
-          >
-            <GlassCard style={{ padding: 24 }}>
-              <h3
+        {/* Add/Edit Form */}
+        <AnimatePresence>
+          {showForm && (
+            <motion.div
+              data-ocid="admin.modal"
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <GlassCard
                 style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "#e2e8f0",
-                  marginBottom: 20,
+                  borderColor: "rgba(99,102,241,0.25)",
+                  boxShadow:
+                    "0 0 40px rgba(99,102,241,0.12), 0 16px 48px rgba(0,0,0,0.6)",
                 }}
-              >
-                {editMode === "add" ? "Add New Semester" : "Edit Semester"}
-              </h3>
-
-              {/* Basic Info */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                  marginBottom: 14,
-                }}
-              >
-                <div>
-                  <label
-                    htmlFor="f-semName"
-                    style={{
-                      fontSize: 12,
-                      color: "#64748b",
-                      marginBottom: 4,
-                      display: "block",
-                    }}
-                  >
-                    Semester Name
-                  </label>
-                  <input
-                    id="f-semName"
-                    data-ocid="admin.input"
-                    style={inputStyle()}
-                    value={form.semName}
-                    onChange={(e) => setField("semName", e.target.value)}
-                    placeholder="e.g. Even Sem 2026 (Jan–May)"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="f-year"
-                    style={{
-                      fontSize: 12,
-                      color: "#64748b",
-                      marginBottom: 4,
-                      display: "block",
-                    }}
-                  >
-                    Year
-                  </label>
-                  <input
-                    id="f-year"
-                    style={inputStyle()}
-                    type="number"
-                    value={Number(form.year)}
-                    onChange={(e) =>
-                      setField("year", BigInt(e.target.value || 0))
-                    }
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="f-semType"
-                    style={{
-                      fontSize: 12,
-                      color: "#64748b",
-                      marginBottom: 4,
-                      display: "block",
-                    }}
-                  >
-                    Semester Type
-                  </label>
-                  <select
-                    id="f-semType"
-                    data-ocid="admin.select"
-                    style={inputStyle()}
-                    value={form.semType}
-                    onChange={(e) => setField("semType", e.target.value)}
-                  >
-                    <option value="even">Even Semester (Jan–May)</option>
-                    <option value="odd">Odd Semester (Jul–Nov)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Date Ranges */}
-              <SectionToggle
-                label="&#128197; Class &amp; Exam Dates"
-                defaultOpen
               >
                 <div
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 10,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 24,
                   }}
                 >
-                  {(
-                    [
-                      ["classStart", "Classes Start"],
-                      ["classEnd", "Classes End"],
-                      ["quiz1Start", "Quiz 1 Start"],
-                      ["quiz1End", "Quiz 1 End"],
-                      ["quiz2Start", "Quiz 2 Start"],
-                      ["quiz2End", "Quiz 2 End"],
-                      ["endSemStart", "End Sem Start"],
-                      ["endSemEnd", "End Sem End"],
-                    ] as [keyof FormData, string][]
-                  ).map(([key, label]) => (
-                    <div key={key}>
-                      <label
-                        htmlFor={`f-${key}`}
+                  <h3
+                    className="page-heading-gradient"
+                    style={{ fontSize: 18, fontWeight: 700 }}
+                  >
+                    {editingId ? "Edit Semester" : "Add New Semester"}
+                  </h3>
+                  <motion.button
+                    data-ocid="admin.close_button"
+                    whileTap={{ scale: 0.9 }}
+                    className="glass-btn"
+                    onClick={() => setShowForm(false)}
+                    style={{ fontSize: 12, padding: "5px 12px" }}
+                  >
+                    ✕ Cancel
+                  </motion.button>
+                </div>
+
+                {/* Basic fields */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: 14,
+                    marginBottom: 20,
+                  }}
+                >
+                  <div>
+                    <div style={fieldLabelStyle}>Semester Name</div>
+                    <input
+                      data-ocid="admin.input"
+                      className="glass-input"
+                      placeholder="e.g. Even Sem 2026"
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                      style={fieldInputStyle}
+                    />
+                  </div>
+                  <div>
+                    <div style={fieldLabelStyle}>Year</div>
+                    <input
+                      className="glass-input"
+                      type="number"
+                      placeholder="2026"
+                      value={form.year}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, year: e.target.value }))
+                      }
+                      style={fieldInputStyle}
+                    />
+                  </div>
+                  <div>
+                    <div style={fieldLabelStyle}>Sem Type</div>
+                    <select
+                      data-ocid="admin.select"
+                      className="glass-input"
+                      value={form.semType}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, semType: e.target.value }))
+                      }
+                      style={fieldInputStyle}
+                    >
+                      <option value="even">Even</option>
+                      <option value="odd">Odd</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Date ranges */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={sectionLabel}>Class Dates</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={fieldLabelStyle}>Class Start</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.classStart}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, classStart: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                    <div>
+                      <div style={fieldLabelStyle}>Class End</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.classEnd}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, classEnd: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={sectionLabel}>Quiz 1 Window</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={fieldLabelStyle}>Start</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.quiz1Start}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, quiz1Start: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                    <div>
+                      <div style={fieldLabelStyle}>End</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.quiz1End}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, quiz1End: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={sectionLabel}>Quiz 2 Window</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={fieldLabelStyle}>Start</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.quiz2Start}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, quiz2Start: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                    <div>
+                      <div style={fieldLabelStyle}>End</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.quiz2End}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, quiz2End: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <div style={sectionLabel}>End Semester Window</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={fieldLabelStyle}>Start</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.endSemStart}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            endSemStart: e.target.value,
+                          }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                    <div>
+                      <div style={fieldLabelStyle}>End</div>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={form.endSemEnd}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, endSemEnd: e.target.value }))
+                        }
+                        style={fieldInputStyle}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Holidays */}
+                <div style={{ marginBottom: 20 }}>
+                  <div
+                    style={{
+                      ...sectionLabel,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>Holidays ({form.holidays.length})</span>
+                    <motion.button
+                      data-ocid="admin.secondary_button"
+                      whileTap={{ scale: 0.95 }}
+                      className="glass-btn"
+                      onClick={() => addHoliday("holidays")}
+                      style={{ fontSize: 11, padding: "3px 10px" }}
+                    >
+                      + Add
+                    </motion.button>
+                  </div>
+                  {form.holidays.map((h, idx) => (
+                    <div
+                      key={`entry-${idx}-${h.date}`}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        marginBottom: 6,
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={h.date}
+                        onChange={(e) =>
+                          updateHoliday("holidays", idx, "date", e.target.value)
+                        }
+                        style={{ flex: "0 0 140px", fontSize: 12 }}
+                      />
+                      <input
+                        className="glass-input"
+                        placeholder="Holiday name"
+                        value={h.name}
+                        onChange={(e) =>
+                          updateHoliday("holidays", idx, "name", e.target.value)
+                        }
+                        style={{ flex: 1, fontSize: 12 }}
+                      />
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        className="glass-btn"
+                        onClick={() => removeHoliday("holidays", idx)}
                         style={{
                           fontSize: 11,
-                          color: "#64748b",
-                          marginBottom: 3,
-                          display: "block",
+                          padding: "3px 8px",
+                          color: "#f87171",
+                          flexShrink: 0,
                         }}
                       >
-                        {label}
-                      </label>
-                      <input
-                        id={`f-${key}`}
-                        style={inputStyle()}
-                        type="date"
-                        value={form[key] as string}
-                        onChange={(e) => setField(key, e.target.value)}
-                      />
+                        ✕
+                      </motion.button>
                     </div>
                   ))}
                 </div>
-              </SectionToggle>
 
-              {/* Holidays */}
-              <SectionToggle label={`Holidays (${form.holidays.length})`}>
-                {form.holidays.map((h, i) => (
+                {/* Events */}
+                <div style={{ marginBottom: 24 }}>
                   <div
-                    key={
-                      (h as unknown as Record<string, string>)._id ?? `h-${i}`
-                    }
                     style={{
+                      ...sectionLabel,
                       display: "flex",
-                      gap: 8,
-                      marginBottom: 8,
+                      justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <input
-                      aria-label="Holiday date"
-                      style={inputStyle({ flex: "0 0 160px" })}
-                      type="date"
-                      value={h.date}
-                      onChange={(e) => setHoliday(i, "date", e.target.value)}
-                    />
-                    <input
-                      aria-label="Holiday name"
-                      style={inputStyle()}
-                      placeholder="Holiday name"
-                      value={h.name}
-                      onChange={(e) => setHoliday(i, "name", e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Remove holiday"
-                      onClick={() => removeHoliday(i)}
+                    <span>Key Events ({form.events.length})</span>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className="glass-btn"
+                      onClick={() => addHoliday("events")}
+                      style={{ fontSize: 11, padding: "3px 10px" }}
+                    >
+                      + Add
+                    </motion.button>
+                  </div>
+                  {form.events.map((h, idx) => (
+                    <div
+                      key={`entry-${idx}-${h.date}`}
                       style={{
-                        ...dangerBtn,
-                        padding: "8px 10px",
-                        flexShrink: 0,
+                        display: "flex",
+                        gap: 8,
+                        marginBottom: 6,
+                        alignItems: "center",
                       }}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addHoliday}
-                  style={{ ...outlineBtn, marginTop: 4 }}
-                >
-                  <Plus size={13} /> Add Holiday
-                </button>
-              </SectionToggle>
+                      <input
+                        type="date"
+                        className="glass-input"
+                        value={h.date}
+                        onChange={(e) =>
+                          updateHoliday("events", idx, "date", e.target.value)
+                        }
+                        style={{ flex: "0 0 140px", fontSize: 12 }}
+                      />
+                      <input
+                        className="glass-input"
+                        placeholder="Event name"
+                        value={h.name}
+                        onChange={(e) =>
+                          updateHoliday("events", idx, "name", e.target.value)
+                        }
+                        style={{ flex: 1, fontSize: 12 }}
+                      />
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        className="glass-btn"
+                        onClick={() => removeHoliday("events", idx)}
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 8px",
+                          color: "#f87171",
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✕
+                      </motion.button>
+                    </div>
+                  ))}
+                </div>
 
-              {/* Events */}
-              <SectionToggle label={`Events (${form.events.length})`}>
-                {form.events.map((ev, i) => (
+                {/* Slot exam dates */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={sectionLabel}>Slot Exam Dates</div>
                   <div
-                    key={
-                      (ev as unknown as Record<string, string>)._id ?? `ev-${i}`
-                    }
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "160px 1fr 120px 36px",
-                      gap: 8,
-                      marginBottom: 8,
-                      alignItems: "center",
+                      overflowX: "auto",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                      borderRadius: 10,
                     }}
                   >
-                    <input
-                      aria-label="Event date"
-                      style={inputStyle()}
-                      type="date"
-                      value={ev.date}
-                      onChange={(e) => setEvent(i, "date", e.target.value)}
-                    />
-                    <input
-                      aria-label="Event name"
-                      style={inputStyle()}
-                      placeholder="Event name"
-                      value={ev.name}
-                      onChange={(e) => setEvent(i, "name", e.target.value)}
-                    />
-                    <input
-                      aria-label="Event type"
-                      style={inputStyle()}
-                      placeholder="Type (e.g. festival)"
-                      value={ev.eventType}
-                      onChange={(e) => setEvent(i, "eventType", e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Remove event"
-                      onClick={() => removeEvent(i)}
-                      style={{ ...dangerBtn, padding: "8px 10px" }}
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        minWidth: 480,
+                      }}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addEvent}
-                  style={{ ...outlineBtn, marginTop: 4 }}
-                >
-                  <Plus size={13} /> Add Event
-                </button>
-              </SectionToggle>
-
-              {/* Slot Exam Dates */}
-              <SectionToggle label="Slot Exam Dates">
-                <div style={{ overflowX: "auto" }}>
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: 12,
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ color: "#64748b" }}>
-                        <th style={{ padding: "6px 8px", textAlign: "left" }}>
-                          Slot
-                        </th>
-                        <th style={{ padding: "6px 8px", textAlign: "left" }}>
-                          Quiz 1
-                        </th>
-                        <th style={{ padding: "6px 8px", textAlign: "left" }}>
-                          Quiz 2
-                        </th>
-                        <th style={{ padding: "6px 8px", textAlign: "left" }}>
-                          End Sem
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {form.slotExamDates.map(([slot, dates]) => (
+                      <thead>
                         <tr
-                          key={slot}
                           style={{
-                            borderTop: "1px solid rgba(255,255,255,0.05)",
+                            borderBottom: "1px solid rgba(255,255,255,0.06)",
                           }}
                         >
-                          <td
+                          <th style={thStyle}>Slot</th>
+                          <th style={thStyle}>Quiz 1</th>
+                          <th style={thStyle}>Quiz 2</th>
+                          <th style={thStyle}>End Sem</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.slotExamDates.map((s, i) => (
+                          <tr
+                            key={s.slot}
                             style={{
-                              padding: "5px 8px",
-                              color: "#a5b4fc",
-                              fontWeight: 700,
+                              borderBottom:
+                                i < form.slotExamDates.length - 1
+                                  ? "1px solid rgba(255,255,255,0.04)"
+                                  : "none",
                             }}
                           >
-                            {slot}
-                          </td>
-                          {(["quiz1", "quiz2", "endSem"] as const).map(
-                            (field) => (
-                              <td key={field} style={{ padding: "5px 8px" }}>
-                                <input
-                                  aria-label={`Slot ${slot} ${field}`}
-                                  style={inputStyle({
-                                    padding: "5px 8px",
-                                    fontSize: 12,
-                                  })}
-                                  type="date"
-                                  value={dates[field]}
-                                  onChange={(e) =>
-                                    setSlotDate(slot, field, e.target.value)
-                                  }
-                                />
-                              </td>
-                            ),
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <td
+                              style={{
+                                ...tdStyle,
+                                fontWeight: 700,
+                                color: "#a78bfa",
+                              }}
+                            >
+                              {s.slot}
+                            </td>
+                            <td style={tdStyle}>
+                              <input
+                                type="date"
+                                className="glass-input"
+                                value={s.quiz1}
+                                onChange={(e) =>
+                                  updateSlotDate(
+                                    s.slot,
+                                    "quiz1",
+                                    e.target.value,
+                                  )
+                                }
+                                style={{ fontSize: 11, width: "100%" }}
+                              />
+                            </td>
+                            <td style={tdStyle}>
+                              <input
+                                type="date"
+                                className="glass-input"
+                                value={s.quiz2}
+                                onChange={(e) =>
+                                  updateSlotDate(
+                                    s.slot,
+                                    "quiz2",
+                                    e.target.value,
+                                  )
+                                }
+                                style={{ fontSize: 11, width: "100%" }}
+                              />
+                            </td>
+                            <td style={tdStyle}>
+                              <input
+                                type="date"
+                                className="glass-input"
+                                value={s.endSem}
+                                onChange={(e) =>
+                                  updateSlotDate(
+                                    s.slot,
+                                    "endSem",
+                                    e.target.value,
+                                  )
+                                }
+                                style={{ fontSize: 11, width: "100%" }}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </SectionToggle>
 
-              {/* Actions */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  justifyContent: "flex-end",
-                  marginTop: 20,
-                  paddingTop: 16,
-                  borderTop: "1px solid rgba(255,255,255,0.07)",
-                }}
-              >
-                <button
-                  data-ocid="admin.cancel_button"
-                  type="button"
-                  onClick={() => setEditMode("none")}
-                  style={outlineBtn}
-                >
-                  Cancel
-                </button>
-                <button
-                  data-ocid="admin.save_button"
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  style={gradBtn}
-                >
-                  {saving ? (
-                    <Loader2 size={15} className="animate-spin" />
-                  ) : null}
-                  {saving ? "Saving..." : "Save Semester"}
-                </button>
-              </div>
-            </GlassCard>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <p
-        style={{
-          textAlign: "center",
-          color: "#334155",
-          fontSize: 12,
-          marginTop: 32,
-        }}
-      >
-        Changes take effect immediately for all students viewing the calendar.
-      </p>
-    </motion.div>
+                {/* Save */}
+                {saveError && (
+                  <div
+                    data-ocid="admin.error_state"
+                    style={{ color: "#f87171", fontSize: 13, marginBottom: 12 }}
+                  >
+                    {saveError}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <motion.button
+                    data-ocid="admin.save_button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="btn-gradient"
+                    onClick={handleSave}
+                    disabled={saving}
+                    style={{ fontSize: 14, padding: "10px 28px" }}
+                  >
+                    {saving ? "Saving…" : "Save Semester"}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    className="glass-btn"
+                    onClick={() => setShowForm(false)}
+                    style={{ fontSize: 13, padding: "10px 20px" }}
+                  >
+                    Cancel
+                  </motion.button>
+                </div>
+              </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }
+
+const fieldLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  color: "#6B7590",
+  marginBottom: 4,
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+const fieldInputStyle: React.CSSProperties = {
+  width: "100%",
+  fontSize: 13,
+};
+
+const sectionLabel: React.CSSProperties = {
+  fontSize: 11,
+  color: "#6366f1",
+  textTransform: "uppercase",
+  letterSpacing: "0.1em",
+  fontWeight: 700,
+  marginBottom: 10,
+};
+
+const thStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "#606880",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  padding: "10px 12px",
+  textAlign: "left",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "6px 12px",
+  fontSize: 13,
+  color: "#C8D0E8",
+  verticalAlign: "middle",
+};

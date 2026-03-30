@@ -13,12 +13,43 @@ export const UserRole = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
+export const Holiday = IDL.Record({ 'date' : IDL.Text, 'name' : IDL.Text });
+export const SlotExamDate = IDL.Record({
+  'slot' : IDL.Text,
+  'quiz1' : IDL.Text,
+  'quiz2' : IDL.Text,
+  'endSem' : IDL.Text,
+});
+export const SemesterConfig = IDL.Record({
+  'id' : IDL.Text,
+  'semType' : IDL.Text,
+  'holidays' : IDL.Vec(Holiday),
+  'quiz1Start' : IDL.Text,
+  'name' : IDL.Text,
+  'year' : IDL.Nat,
+  'isActive' : IDL.Bool,
+  'slotExamDates' : IDL.Vec(SlotExamDate),
+  'endSemStart' : IDL.Text,
+  'events' : IDL.Vec(Holiday),
+  'quiz1End' : IDL.Text,
+  'quiz2End' : IDL.Text,
+  'quiz2Start' : IDL.Text,
+  'endSemEnd' : IDL.Text,
+  'classStart' : IDL.Text,
+  'classEnd' : IDL.Text,
+});
 export const AcademicData = IDL.Text;
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'deleteSemesterConfig' : IDL.Func([IDL.Text], [], []),
+  'getActiveSemesterConfig' : IDL.Func(
+      [],
+      [IDL.Opt(SemesterConfig)],
+      ['query'],
+    ),
   'getCallerSnapshot' : IDL.Func([], [IDL.Opt(AcademicData)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -28,8 +59,11 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'listSemesterConfigs' : IDL.Func([], [IDL.Vec(SemesterConfig)], ['query']),
   'saveCallerSnapshot' : IDL.Func([AcademicData], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'saveSemesterConfig' : IDL.Func([SemesterConfig], [], []),
+  'setActiveSemester' : IDL.Func([IDL.Text], [], []),
 });
 
 export const idlInitArgs = [];
@@ -40,12 +74,43 @@ export const idlFactory = ({ IDL }) => {
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
+  const Holiday = IDL.Record({ 'date' : IDL.Text, 'name' : IDL.Text });
+  const SlotExamDate = IDL.Record({
+    'slot' : IDL.Text,
+    'quiz1' : IDL.Text,
+    'quiz2' : IDL.Text,
+    'endSem' : IDL.Text,
+  });
+  const SemesterConfig = IDL.Record({
+    'id' : IDL.Text,
+    'semType' : IDL.Text,
+    'holidays' : IDL.Vec(Holiday),
+    'quiz1Start' : IDL.Text,
+    'name' : IDL.Text,
+    'year' : IDL.Nat,
+    'isActive' : IDL.Bool,
+    'slotExamDates' : IDL.Vec(SlotExamDate),
+    'endSemStart' : IDL.Text,
+    'events' : IDL.Vec(Holiday),
+    'quiz1End' : IDL.Text,
+    'quiz2End' : IDL.Text,
+    'quiz2Start' : IDL.Text,
+    'endSemEnd' : IDL.Text,
+    'classStart' : IDL.Text,
+    'classEnd' : IDL.Text,
+  });
   const AcademicData = IDL.Text;
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'deleteSemesterConfig' : IDL.Func([IDL.Text], [], []),
+    'getActiveSemesterConfig' : IDL.Func(
+        [],
+        [IDL.Opt(SemesterConfig)],
+        ['query'],
+      ),
     'getCallerSnapshot' : IDL.Func([], [IDL.Opt(AcademicData)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -55,8 +120,11 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'listSemesterConfigs' : IDL.Func([], [IDL.Vec(SemesterConfig)], ['query']),
     'saveCallerSnapshot' : IDL.Func([AcademicData], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'saveSemesterConfig' : IDL.Func([SemesterConfig], [], []),
+    'setActiveSemester' : IDL.Func([IDL.Text], [], []),
   });
 };
 

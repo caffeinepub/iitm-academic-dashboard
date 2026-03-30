@@ -1,34 +1,59 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { useFirebaseAuth } from "../hooks/useFirebaseAuth";
 
 interface LoginPageProps {
   onLogin: () => void;
   onBack: () => void;
 }
 
+function GoogleIcon() {
+  return (
+    <svg
+      role="img"
+      aria-label="Google"
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"
+        fill="#4285F4"
+      />
+      <path
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"
+        fill="#34A853"
+      />
+      <path
+        d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58Z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
-  const { login, isLoggingIn, isLoginSuccess, identity } =
-    useInternetIdentity();
-  const [syncStarted, setSyncStarted] = useState(false);
+  const { signInWithGoogle, isLoading, error } = useFirebaseAuth();
 
   const handleLocal = () => {
     localStorage.setItem("instiflow_storage_choice", "local");
     onLogin();
   };
 
-  const handleSync = () => {
-    setSyncStarted(true);
-    login();
-  };
-
-  useEffect(() => {
-    if (syncStarted && (isLoginSuccess || identity)) {
+  const handleGoogleSync = async () => {
+    await signInWithGoogle();
+    const stored = localStorage.getItem("instiflow_user");
+    if (stored) {
       localStorage.setItem("instiflow_storage_choice", "sync");
       onLogin();
     }
-  }, [syncStarted, isLoginSuccess, identity, onLogin]);
+  };
 
   return (
     <div
@@ -120,7 +145,6 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           transition={{ delay: 0.08, duration: 0.5 }}
           style={{ textAlign: "center", marginBottom: 36 }}
         >
-          {/* Brand dot */}
           <div
             style={{
               display: "inline-block",
@@ -278,11 +302,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   }}
                 >
                   <span
-                    style={{
-                      color: "#6366f1",
-                      fontWeight: 700,
-                      fontSize: 14,
-                    }}
+                    style={{ color: "#6366f1", fontWeight: 700, fontSize: 14 }}
                   >
                     ✓
                   </span>{" "}
@@ -390,8 +410,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   margin: 0,
                 }}
               >
-                Login with{" "}
-                <strong style={{ color: "#a78bfa" }}>Internet Identity</strong>{" "}
+                Login with <strong style={{ color: "#a78bfa" }}>Google</strong>{" "}
                 to back up and sync your timetable, attendance, and tasks across
                 all devices.
               </p>
@@ -424,11 +443,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
                   }}
                 >
                   <span
-                    style={{
-                      color: "#a78bfa",
-                      fontWeight: 700,
-                      fontSize: 14,
-                    }}
+                    style={{ color: "#a78bfa", fontWeight: 700, fontSize: 14 }}
                   >
                     ✓
                   </span>{" "}
@@ -437,34 +452,73 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               ))}
             </ul>
 
+            {/* Error message */}
+            <AnimatePresence>
+              {error && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  data-ocid="login.sync.error_state"
+                  style={{
+                    margin: 0,
+                    fontSize: 12,
+                    color: "#f87171",
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {error}
+                </motion.p>
+              )}
+            </AnimatePresence>
+
+            {/* Google Sign-In button */}
             <motion.button
               type="button"
               data-ocid="login.sync.primary_button"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleSync}
-              disabled={isLoggingIn || syncStarted}
+              whileHover={!isLoading ? { scale: 1.02 } : {}}
+              whileTap={!isLoading ? { scale: 0.97 } : {}}
+              onClick={handleGoogleSync}
+              disabled={isLoading}
               style={{
                 width: "100%",
-                padding: "12px",
+                padding: "11px 16px",
                 borderRadius: 12,
-                background:
-                  isLoggingIn || syncStarted
-                    ? "rgba(99,102,241,0.3)"
-                    : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-                border: "none",
-                color: "#fff",
+                background: isLoading ? "rgba(240,240,240,0.85)" : "#ffffff",
+                border: "1px solid rgba(0,0,0,0.12)",
+                color: "#3c3c3c",
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: isLoggingIn || syncStarted ? "wait" : "pointer",
+                cursor: isLoading ? "wait" : "pointer",
                 fontFamily: "inherit",
-                boxShadow:
-                  isLoggingIn || syncStarted
-                    ? "none"
-                    : "0 4px 20px rgba(99,102,241,0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                boxShadow: isLoading
+                  ? "none"
+                  : "0 1px 6px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
+                transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
-              {isLoggingIn || syncStarted ? "Connecting..." : "Login & Sync"}
+              {isLoading ? (
+                <>
+                  <Loader2
+                    size={16}
+                    style={{ animation: "spin 0.8s linear infinite" }}
+                  />
+                  <span>Connecting...</span>
+                </>
+              ) : (
+                <>
+                  <GoogleIcon />
+                  <span>Continue with Google</span>
+                </>
+              )}
             </motion.button>
           </motion.div>
         </div>
@@ -495,6 +549,13 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           </button>
         </motion.div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

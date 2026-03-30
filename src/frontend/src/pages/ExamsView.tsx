@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { useState } from "react";
-import type { SemesterConfig } from "../backend.d";
 import { GlassCard } from "../components/GlassCard";
+import { useSemesterConfig } from "../hooks/useSemesterConfig";
 import type { Course, ExamEntry, SemSettings } from "../types";
 import { SLOT_EXAM_DATES, getSemCalendar } from "../utils/semester";
 
@@ -9,7 +9,6 @@ interface Props {
   courses: Course[];
   semSettings: SemSettings;
   examEntries: ExamEntry[];
-  activeSemConfig?: SemesterConfig | null;
   onSetExamOverride: (
     courseId: string,
     examType: "quiz1" | "quiz2" | "endSem",
@@ -44,35 +43,40 @@ export function ExamsView({
   courses,
   semSettings,
   examEntries,
-  activeSemConfig,
   onSetExamOverride,
   onClearExamOverride,
 }: Props) {
-  const cal = activeSemConfig
-    ? {
-        year: Number(activeSemConfig.year),
-        semType: activeSemConfig.semType as "even" | "odd",
-        classStart: activeSemConfig.classStart,
-        classEnd: activeSemConfig.classEnd,
-        quiz1Start: activeSemConfig.quiz1Start,
-        quiz1End: activeSemConfig.quiz1End,
-        quiz2Start: activeSemConfig.quiz2Start,
-        quiz2End: activeSemConfig.quiz2End,
-        endSemStart: activeSemConfig.endSemStart,
-        endSemEnd: activeSemConfig.endSemEnd,
-      }
-    : getSemCalendar(semSettings.year, semSettings.semType);
-  const dynamicSlotExamDates: Record<
-    string,
-    { quiz1: string; quiz2: string; endSem: string }
-  > | null = activeSemConfig
-    ? Object.fromEntries(
-        activeSemConfig.slotExamDates.map(([slot, dates]) => [slot, dates]),
-      )
-    : null;
+  const { semConfig } = useSemesterConfig();
   const today = new Date().toISOString().split("T")[0];
   const [editingExam, setEditingExam] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
+
+  const cal = semConfig
+    ? {
+        year: Number(semConfig.year),
+        semType: semConfig.semType as "even" | "odd",
+        classStart: semConfig.classStart,
+        classEnd: semConfig.classEnd,
+        quiz1Start: semConfig.quiz1Start,
+        quiz1End: semConfig.quiz1End,
+        quiz2Start: semConfig.quiz2Start,
+        quiz2End: semConfig.quiz2End,
+        endSemStart: semConfig.endSemStart,
+        endSemEnd: semConfig.endSemEnd,
+      }
+    : getSemCalendar(semSettings.year, semSettings.semType);
+
+  const dynamicSlotDates: Record<
+    string,
+    { quiz1: string; quiz2: string; endSem: string }
+  > = semConfig
+    ? Object.fromEntries(
+        semConfig.slotExamDates.map((s) => [
+          s.slot,
+          { quiz1: s.quiz1, quiz2: s.quiz2, endSem: s.endSem },
+        ]),
+      )
+    : SLOT_EXAM_DATES;
 
   const examTypes = [
     {
@@ -104,7 +108,7 @@ export function ExamsView({
         const override = examEntries.find(
           (e) => e.courseId === c.id && e.examType === et.key,
         );
-        const slotDates = (dynamicSlotExamDates ?? SLOT_EXAM_DATES)[c.slot];
+        const slotDates = dynamicSlotDates[c.slot];
         const exactDate = override
           ? override.date
           : slotDates

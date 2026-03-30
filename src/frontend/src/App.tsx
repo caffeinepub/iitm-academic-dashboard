@@ -4,12 +4,10 @@ import {
   useMotionValue,
   useTransform,
 } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
-import type { SemesterConfig } from "./backend.d";
+import { useCallback, useState } from "react";
 import { NotificationManager } from "./components/NotificationManager";
 import { Sidebar, type TabId } from "./components/Sidebar";
 import { TAB_THEMES, TabThemeContext } from "./contexts/TabTheme";
-import { useActor } from "./hooks/useActor";
 import { useAppData } from "./hooks/useAppData";
 import { AdminPanel } from "./pages/AdminPanel";
 import { AttendanceTracker } from "./pages/AttendanceTracker";
@@ -26,12 +24,8 @@ export default function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("today");
-  const [activeSemConfig, setActiveSemConfig] = useState<SemesterConfig | null>(
-    null,
-  );
   const data = useAppData();
   const theme = TAB_THEMES[activeTab];
-  const { actor, isFetching } = useActor();
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -51,21 +45,11 @@ export default function App() {
     [mouseX, mouseY],
   );
 
-  useEffect(() => {
-    if (!actor || isFetching) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (actor as any)
-      .getActiveSemesterConfig()
-      .then((cfg) => {
-        if (cfg) setActiveSemConfig(cfg);
-      })
-      .catch(() => {
-        // silently fall back to hardcoded
-      });
-  }, [actor, isFetching]);
-
-  const isAdminRoute =
-    typeof window !== "undefined" && window.location.hash === "#admin";
+  // Hash-based routing for admin panel
+  const isAdminRoute = window.location.hash === "#admin";
+  if (isAdminRoute) {
+    return <AdminPanel />;
+  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -104,7 +88,6 @@ export default function App() {
             courses={data.courses}
             tasks={data.tasks}
             semSettings={data.semSettings}
-            activeSemConfig={activeSemConfig}
           />
         );
       case "exams":
@@ -115,7 +98,6 @@ export default function App() {
             examEntries={data.examEntries}
             onSetExamOverride={data.setExamOverride}
             onClearExamOverride={data.clearExamOverride}
-            activeSemConfig={activeSemConfig}
           />
         );
       case "tasks":
@@ -143,46 +125,12 @@ export default function App() {
 
   return (
     <AnimatePresence mode="wait">
-      {isAdminRoute ? (
-        <motion.div
-          key="admin"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{ minHeight: "100vh", background: "#0a0a0f" }}
-        >
-          <div
-            style={{
-              padding: "20px 28px",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
-            }}
-          >
-            <button
-              type="button"
-              className="page-heading-gradient"
-              style={{
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: "pointer",
-                background: "none",
-                border: "none",
-                padding: 0,
-              }}
-              onClick={() => {
-                window.location.hash = "";
-                window.location.reload();
-              }}
-            >
-              InstiFlow
-            </button>
-          </div>
-          <AdminPanel />
-        </motion.div>
-      ) : showLanding ? (
+      {showLanding ? (
         <motion.div
           key="landing"
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0 }}
+          exit={{ opacity: 0, scale: 0.98, filter: "blur(8px)" }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
         >
           <LandingPage
             onEnter={() => {
@@ -196,8 +144,8 @@ export default function App() {
           key="login"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          exit={{ opacity: 0, scale: 0.98, filter: "blur(8px)" }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
         >
           <LoginPage
             onLogin={() => setShowLogin(false)}
@@ -237,9 +185,7 @@ export default function App() {
                 style={{
                   left: mouseX,
                   top: mouseY,
-                  background: `radial-gradient(circle 300px at center, ${
-                    theme.accent
-                  }0d, transparent 70%)`,
+                  background: `radial-gradient(circle 300px at center, ${theme.accent}0d, transparent 70%)`,
                 }}
               />
 
@@ -295,54 +241,6 @@ export default function App() {
                   <AnimatePresence mode="wait">
                     <div key={activeTab}>{renderContent()}</div>
                   </AnimatePresence>
-                  {/* Footer */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "16px 0 8px",
-                      borderTop: "1px solid rgba(255,255,255,0.04)",
-                      marginTop: 24,
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      data-ocid="admin.link"
-                      onClick={() => {
-                        window.location.hash = "admin";
-                        window.location.reload();
-                      }}
-                      style={{
-                        fontSize: 11,
-                        color: "#334155",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                      }}
-                    >
-                      Admin Panel
-                    </button>
-                    <span style={{ color: "#1e293b" }}>&middot;</span>
-                    <span style={{ fontSize: 11, color: "#1e293b" }}>
-                      &copy; {new Date().getFullYear()}. Built with love using{" "}
-                      <a
-                        href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(
-                          typeof window !== "undefined"
-                            ? window.location.hostname
-                            : "",
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "#334155" }}
-                      >
-                        caffeine.ai
-                      </a>
-                    </span>
-                  </div>
                 </main>
               </div>
             </motion.div>

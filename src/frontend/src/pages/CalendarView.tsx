@@ -1,17 +1,18 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import type { SemesterConfig } from "../backend.d";
 import { GlassCard } from "../components/GlassCard";
+import { useSemesterConfig } from "../hooks/useSemesterConfig";
 import type { Course, SemSettings, Task } from "../types";
 import { getHolidaysForSem, isHoliday } from "../utils/holidays";
+import type { Holiday } from "../utils/holidays";
 import { getSemCalendar, isExamPeriod } from "../utils/semester";
+import type { SemCalendar } from "../utils/semester";
 import { getClassesOnDay } from "../utils/slots";
 
 interface Props {
   courses: Course[];
   tasks: Task[];
   semSettings: SemSettings;
-  activeSemConfig?: SemesterConfig | null;
 }
 
 const MONTH_NAMES = [
@@ -36,32 +37,32 @@ const LEGEND: [string, string][] = [
   ["rgba(242,201,76,0.8)", "Holiday"],
 ];
 
-export function CalendarView({
-  courses,
-  tasks,
-  semSettings,
-  activeSemConfig,
-}: Props) {
+export function CalendarView({ courses, tasks, semSettings }: Props) {
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const { semConfig } = useSemesterConfig();
 
-  const cal = activeSemConfig
-    ? {
-        year: Number(activeSemConfig.year),
-        semType: activeSemConfig.semType as "even" | "odd",
-        classStart: activeSemConfig.classStart,
-        classEnd: activeSemConfig.classEnd,
-        quiz1Start: activeSemConfig.quiz1Start,
-        quiz1End: activeSemConfig.quiz1End,
-        quiz2Start: activeSemConfig.quiz2Start,
-        quiz2End: activeSemConfig.quiz2End,
-        endSemStart: activeSemConfig.endSemStart,
-        endSemEnd: activeSemConfig.endSemEnd,
-      }
-    : getSemCalendar(semSettings.year, semSettings.semType);
-  const holidays = activeSemConfig
-    ? activeSemConfig.holidays
-    : getHolidaysForSem(semSettings.year, semSettings.semType);
+  let cal: SemCalendar;
+  let holidays: Holiday[];
+
+  if (semConfig) {
+    cal = {
+      year: Number(semConfig.year),
+      semType: semConfig.semType as "even" | "odd",
+      classStart: semConfig.classStart,
+      classEnd: semConfig.classEnd,
+      quiz1Start: semConfig.quiz1Start,
+      quiz1End: semConfig.quiz1End,
+      quiz2Start: semConfig.quiz2Start,
+      quiz2End: semConfig.quiz2End,
+      endSemStart: semConfig.endSemStart,
+      endSemEnd: semConfig.endSemEnd,
+    };
+    holidays = semConfig.holidays;
+  } else {
+    cal = getSemCalendar(semSettings.year, semSettings.semType);
+    holidays = getHolidaysForSem(semSettings.year, semSettings.semType);
+  }
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();

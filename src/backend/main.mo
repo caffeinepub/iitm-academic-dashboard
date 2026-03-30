@@ -1,6 +1,8 @@
 import Map "mo:core/Map";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
+import Text "mo:core/Text";
+import Array "mo:core/Array";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
@@ -14,30 +16,11 @@ actor {
 
   type AcademicData = Text;
 
-  let records = Map.empty<Principal, AcademicData>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
-
-  // Semester config types
-  public type HolidayEntry = {
-    date : Text;
-    name : Text;
-  };
-
-  public type EventEntry = {
-    date : Text;
-    name : Text;
-    eventType : Text;
-  };
-
-  public type SlotExamDates = {
-    quiz1 : Text;
-    quiz2 : Text;
-    endSem : Text;
-  };
-
+  public type Holiday = { date : Text; name : Text };
+  public type SlotExamDate = { slot : Text; quiz1 : Text; quiz2 : Text; endSem : Text };
   public type SemesterConfig = {
     id : Text;
-    semName : Text;
+    name : Text;
     year : Nat;
     semType : Text;
     classStart : Text;
@@ -48,12 +31,14 @@ actor {
     quiz2End : Text;
     endSemStart : Text;
     endSemEnd : Text;
-    holidays : [HolidayEntry];
-    events : [EventEntry];
-    slotExamDates : [(Text, SlotExamDates)];
+    holidays : [Holiday];
+    events : [Holiday];
+    slotExamDates : [SlotExamDate];
     isActive : Bool;
   };
 
+  let records = Map.empty<Principal, AcademicData>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
   let semesterConfigs = Map.empty<Text, SemesterConfig>();
 
   // Required user profile functions
@@ -93,62 +78,106 @@ actor {
     records.add(caller, snapshot);
   };
 
-  // Semester config functions (admin-only writes, public reads)
+  // Semester configuration functions
   public shared ({ caller }) func saveSemesterConfig(config : SemesterConfig) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can save semester configs");
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can save semester configurations");
     };
     semesterConfigs.add(config.id, config);
   };
 
-  public query func getSemesterConfigs() : async [SemesterConfig] {
-    semesterConfigs.values().toArray();
-  };
-
-  public query func getActiveSemesterConfig() : async ?SemesterConfig {
-    for (cfg in semesterConfigs.values()) {
-      if (cfg.isActive) return ?cfg;
+  public shared ({ caller }) func deleteSemesterConfig(id : Text) : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can delete semester configurations");
     };
-    null;
+    semesterConfigs.remove(id);
   };
 
   public shared ({ caller }) func setActiveSemester(id : Text) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
       Runtime.trap("Unauthorized: Only admins can set active semester");
     };
-    let keys = semesterConfigs.keys().toArray();
-    for (key in keys.vals()) {
-      switch (semesterConfigs.get(key)) {
-        case (?cfg) {
-          let updated : SemesterConfig = {
-            id = cfg.id;
-            semName = cfg.semName;
-            year = cfg.year;
-            semType = cfg.semType;
-            classStart = cfg.classStart;
-            classEnd = cfg.classEnd;
-            quiz1Start = cfg.quiz1Start;
-            quiz1End = cfg.quiz1End;
-            quiz2Start = cfg.quiz2Start;
-            quiz2End = cfg.quiz2End;
-            endSemStart = cfg.endSemStart;
-            endSemEnd = cfg.endSemEnd;
-            holidays = cfg.holidays;
-            events = cfg.events;
-            slotExamDates = cfg.slotExamDates;
-            isActive = key == id;
-          };
-          semesterConfigs.add(key, updated);
+
+    // First, set all semesters to inactive
+    for ((configId, config) in semesterConfigs.entries()) {
+      let updatedConfig = {
+        id = config.id;
+        name = config.name;
+        year = config.year;
+        semType = config.semType;
+        classStart = config.classStart;
+        classEnd = config.classEnd;
+        quiz1Start = config.quiz1Start;
+        quiz1End = config.quiz1End;
+        quiz2Start = config.quiz2Start;
+        quiz2End = config.quiz2End;
+        endSemStart = config.endSemStart;
+        endSemEnd = config.endSemEnd;
+        holidays = config.holidays;
+        events = config.events;
+        slotExamDates = config.slotExamDates;
+        isActive = false;
+      };
+      semesterConfigs.add(configId, updatedConfig);
+    };
+
+    // Then, set the specified semester to active
+    switch (semesterConfigs.get(id)) {
+      case (?config) {
+        let activeConfig = {
+          id = config.id;
+          name = config.name;
+          year = config.year;
+          semType = config.semType;
+          classStart = config.classStart;
+          classEnd = config.classEnd;
+          quiz1Start = config.quiz1Start;
+          quiz1End = config.quiz1End;
+          quiz2Start = config.quiz2Start;
+          quiz2End = config.quiz2End;
+          endSemStart = config.endSemStart;
+          endSemEnd = config.endSemEnd;
+          holidays = config.holidays;
+          events = config.events;
+          slotExamDates = config.slotExamDates;
+          isActive = true;
         };
-        case null {};
+        semesterConfigs.add(id, activeConfig);
+      };
+      case null {
+        Runtime.trap("Semester configuration not found");
       };
     };
   };
 
-  public shared ({ caller }) func deleteSemesterConfig(id : Text) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can delete semester configs");
+  public query func getActiveSemesterConfig() : async ?SemesterConfig {
+    // Public function - no authorization required
+    for ((_, config) in semesterConfigs.entries()) {
+      if (config.isActive) {
+        return ?config;
+      };
     };
-    ignore semesterConfigs.remove(id);
+    null;
+  };
+
+  public query ({ caller }) func listSemesterConfigs() : async [SemesterConfig] {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can list all semester configurations");
+    };
+
+    let configArray = Array.tabulate(
+      semesterConfigs.size(),
+      func(i : Nat) : SemesterConfig {
+        var index = 0;
+        for ((_, config) in semesterConfigs.entries()) {
+          if (index == i) {
+            return config;
+          };
+          index += 1;
+        };
+        Runtime.trap("Index out of bounds");
+      },
+    );
+    configArray;
   };
 };
