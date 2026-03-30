@@ -23,6 +23,7 @@ import { TodayDashboard } from "./pages/TodayDashboard";
 export default function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("today");
   const data = useAppData();
   const theme = TAB_THEMES[activeTab];
@@ -44,12 +45,6 @@ export default function App() {
     },
     [mouseX, mouseY],
   );
-
-  // Hash-based routing for admin panel
-  const isAdminRoute = window.location.hash === "#admin";
-  if (isAdminRoute) {
-    return <AdminPanel />;
-  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -123,6 +118,10 @@ export default function App() {
     }
   };
 
+  if (showAdmin) {
+    return <AdminPanel onBack={() => setShowAdmin(false)} />;
+  }
+
   return (
     <AnimatePresence mode="wait">
       {showLanding ? (
@@ -137,6 +136,7 @@ export default function App() {
               setShowLanding(false);
               setShowLogin(true);
             }}
+            onAdmin={() => setShowAdmin(true)}
           />
         </motion.div>
       ) : showLogin ? (

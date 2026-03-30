@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface LandingPageProps {
   onEnter: () => void;
+  onAdmin?: () => void;
 }
 
-export function LandingPage({ onEnter }: LandingPageProps) {
+export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
@@ -55,8 +56,11 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   const stagger = (i: number) => ({ delay: 0.05 + i * 0.08 });
 
   const goToAdmin = () => {
-    window.location.hash = "admin";
-    window.location.reload();
+    if (onAdmin) {
+      onAdmin();
+    } else {
+      window.location.hash = "admin";
+    }
   };
 
   return (

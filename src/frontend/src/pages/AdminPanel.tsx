@@ -72,7 +72,7 @@ function emptyForm(): Omit<SemesterConfig, "id" | "year" | "isActive"> & {
   };
 }
 
-export function AdminPanel() {
+export function AdminPanel({ onBack }: { onBack?: () => void }) {
   const { login, clear, loginStatus, identity, isLoggingIn } =
     useInternetIdentity();
   const { actor, isFetching } = useActor();
@@ -319,16 +319,20 @@ export function AdminPanel() {
                 {isLoggingIn ? "Connecting…" : "Login with Internet Identity"}
               </motion.button>
               <div style={{ marginTop: 16 }}>
-                <a
-                  href="/"
+                <button
+                  type="button"
+                  onClick={onBack}
                   style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                     color: "#4A5270",
                     fontSize: 12,
-                    textDecoration: "none",
+                    padding: 0,
                   }}
                 >
                   ← Back to InstiFlow
-                </a>
+                </button>
               </div>
             </div>
           </GlassCard>
