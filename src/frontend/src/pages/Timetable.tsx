@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { GlassCard } from "../components/GlassCard";
 import type { Course } from "../types";
 import {
@@ -10,16 +10,6 @@ import {
   getSlotColor,
   getSlotScheduleDesc,
 } from "../utils/slots";
-
-interface EveningSlot {
-  id: string;
-  courseName: string;
-  courseCode: string;
-  venue: string;
-  days: string[];
-  startTime: string;
-  endTime: string;
-}
 
 interface Props {
   courses: Course[];
@@ -116,26 +106,6 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
 
   // Save/Load
   const [showSaveLoad, setShowSaveLoad] = useState(false);
-
-  // Evening slots (6PM-8PM)
-  const [showEveningSlots, setShowEveningSlots] = useState(false);
-  const [eveningSlots, setEveningSlots] = useState<EveningSlot[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("eveningSlots") || "[]");
-    } catch {
-      return [];
-    }
-  });
-  const [evCourseName, setEvCourseName] = useState("");
-  const [evCourseCode, setEvCourseCode] = useState("");
-  const [evVenue, setEvVenue] = useState("");
-  const [evDays, setEvDays] = useState<string[]>([]);
-  const [evStartTime, setEvStartTime] = useState("18:00");
-  const [evEndTime, setEvEndTime] = useState("20:00");
-
-  useEffect(() => {
-    localStorage.setItem("eveningSlots", JSON.stringify(eveningSlots));
-  }, [eveningSlots]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const saveOverrides = (list: DayOverride[]) => {
@@ -1156,7 +1126,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                         labSlot?: string | null,
                       ) => {
                         const bg = course?.color ?? null;
-                        const filled = !!(course || bg || overrideName);
+                        const filled = !!(bg || overrideName);
                         // For empty bottom halves, show the lab slot letter instead
                         const displaySlot =
                           !isLab && !filled && labSlot ? labSlot : slotLetter;
@@ -1218,40 +1188,23 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                         course?.code ||
                                         course?.name.slice(0, 6)}
                                     </span>
-                                    {course?.name && (
-                                      <span
-                                        style={{
-                                          fontSize: 7,
-                                          color: "rgba(0,0,0,0.7)",
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          whiteSpace: "nowrap",
-                                          maxWidth: "100%",
-                                          display: "block",
-                                          textAlign: "center",
-                                        }}
-                                      >
-                                        {course.name.length > 12
-                                          ? `${course.name.slice(0, 11)}…`
-                                          : course.name}
-                                      </span>
-                                    )}
-                                    {course?.venue && (
-                                      <span
-                                        style={{
-                                          fontSize: 7,
-                                          color: "rgba(0,0,0,0.55)",
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          whiteSpace: "nowrap",
-                                          maxWidth: "100%",
-                                          display: "block",
-                                          textAlign: "center",
-                                        }}
-                                      >
-                                        {course.venue}
-                                      </span>
-                                    )}
+                                    {(course?.venue || course?.name) &&
+                                      !isLab && (
+                                        <span
+                                          style={{
+                                            fontSize: 7,
+                                            color: "rgba(0,0,0,0.55)",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                            maxWidth: "100%",
+                                            display: "block",
+                                            textAlign: "center",
+                                          }}
+                                        >
+                                          {course?.venue ?? ""}
+                                        </span>
+                                      )}
                                   </>
                                 )}
                               </>
@@ -1309,7 +1262,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                     const overrideName = overrideInfo?.name ?? null;
                     const overrideTime = overrideInfo?.time ?? null;
                     const bg = course?.color ?? null;
-                    const filled = !!(course || bg || overrideName);
+                    const filled = !!(bg || overrideName);
 
                     return (
                       <motion.td
@@ -1515,250 +1468,6 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
             </div>
           )}
         </div>
-      </GlassCard>
-
-      {/* Evening & Extra Classes */}
-      <GlassCard className="print-hide" style={{ marginBottom: 16 }}>
-        <button
-          type="button"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            cursor: "pointer",
-            background: "none",
-            border: "none",
-            width: "100%",
-            padding: 0,
-          }}
-          onClick={() => setShowEveningSlots(!showEveningSlots)}
-        >
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#B0BAD0" }}>
-            ⏰ Evening &amp; Extra Classes (6 PM – 8 PM)
-          </div>
-          <span style={{ color: "#6B7590", fontSize: 18 }}>
-            {showEveningSlots ? "▲" : "▼"}
-          </span>
-        </button>
-        {showEveningSlots && (
-          <div style={{ marginTop: 16 }}>
-            {/* Add form */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                marginBottom: 16,
-                padding: "14px 16px",
-                background: "rgba(139,92,246,0.08)",
-                borderRadius: 10,
-                border: "1px solid rgba(139,92,246,0.2)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#6B7590",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  fontWeight: 700,
-                }}
-              >
-                Add Evening Slot
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 8,
-                }}
-              >
-                <input
-                  className="glass-input"
-                  placeholder="Course Name"
-                  value={evCourseName}
-                  onChange={(e) => setEvCourseName(e.target.value)}
-                  style={{ fontSize: 13 }}
-                />
-                <input
-                  className="glass-input"
-                  placeholder="Course Code"
-                  value={evCourseCode}
-                  onChange={(e) => setEvCourseCode(e.target.value)}
-                  style={{ fontSize: 13 }}
-                />
-                <input
-                  className="glass-input"
-                  placeholder="Venue"
-                  value={evVenue}
-                  onChange={(e) => setEvVenue(e.target.value)}
-                  style={{ fontSize: 13 }}
-                />
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    className="glass-input"
-                    type="time"
-                    value={evStartTime}
-                    onChange={(e) => setEvStartTime(e.target.value)}
-                    style={{ fontSize: 13, flex: 1 }}
-                  />
-                  <span style={{ color: "#6B7590" }}>–</span>
-                  <input
-                    className="glass-input"
-                    type="time"
-                    value={evEndTime}
-                    onChange={(e) => setEvEndTime(e.target.value)}
-                    style={{ fontSize: 13, flex: 1 }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div
-                  style={{ fontSize: 11, color: "#6B7590", marginBottom: 6 }}
-                >
-                  Days:
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) => (
-                    <label
-                      key={d}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={evDays.includes(d)}
-                        onChange={(e) => {
-                          if (e.target.checked)
-                            setEvDays((prev) => [...prev, d]);
-                          else setEvDays((prev) => prev.filter((x) => x !== d));
-                        }}
-                      />
-                      <span style={{ fontSize: 12, color: "#B0BAD0" }}>
-                        {d}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <motion.button
-                data-ocid="timetable.evening.button"
-                whileTap={{ scale: 0.97 }}
-                className="btn-gradient"
-                style={{
-                  alignSelf: "flex-start",
-                  padding: "8px 18px",
-                  fontSize: 13,
-                }}
-                onClick={() => {
-                  if (!evCourseName.trim()) return;
-                  const slot: EveningSlot = {
-                    id: Date.now().toString(),
-                    courseName: evCourseName.trim(),
-                    courseCode: evCourseCode.trim(),
-                    venue: evVenue.trim(),
-                    days: evDays,
-                    startTime: evStartTime,
-                    endTime: evEndTime,
-                  };
-                  setEveningSlots((prev) => [...prev, slot]);
-                  setEvCourseName("");
-                  setEvCourseCode("");
-                  setEvVenue("");
-                  setEvDays([]);
-                  setEvStartTime("18:00");
-                  setEvEndTime("20:00");
-                }}
-              >
-                + Add Slot
-              </motion.button>
-            </div>
-            {eveningSlots.length === 0 ? (
-              <div style={{ color: "#3D4460", fontSize: 13 }}>
-                No evening slots added yet.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {eveningSlots.map((es, idx) => (
-                  <div
-                    key={es.id}
-                    data-ocid={`timetable.evening.item.${idx + 1}`}
-                    style={{
-                      padding: "12px 16px",
-                      background: "rgba(139,92,246,0.12)",
-                      borderRadius: 10,
-                      border: "1px solid rgba(139,92,246,0.25)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          color: "#E0E6FF",
-                          fontSize: 14,
-                        }}
-                      >
-                        {es.courseName}{" "}
-                        {es.courseCode && (
-                          <span
-                            style={{
-                              color: "#8B9AC0",
-                              fontWeight: 400,
-                              fontSize: 12,
-                            }}
-                          >
-                            ({es.courseCode})
-                          </span>
-                        )}
-                      </div>
-                      {es.venue && (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#8B9AC0",
-                            marginTop: 2,
-                          }}
-                        >
-                          📍 {es.venue}
-                        </div>
-                      )}
-                      <div
-                        style={{ fontSize: 12, color: "#8B9AC0", marginTop: 2 }}
-                      >
-                        🕕 {es.startTime} – {es.endTime}
-                        {es.days.length > 0 && (
-                          <span style={{ marginLeft: 8 }}>
-                            {es.days.join(", ")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <motion.button
-                      data-ocid={`timetable.evening.delete_button.${idx + 1}`}
-                      whileTap={{ scale: 0.95 }}
-                      className="glass-btn glass-btn-red"
-                      style={{ padding: "4px 12px", fontSize: 12 }}
-                      onClick={() =>
-                        setEveningSlots((prev) =>
-                          prev.filter((s) => s.id !== es.id),
-                        )
-                      }
-                    >
-                      Remove
-                    </motion.button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </GlassCard>
 
       {/* Course Cards */}
