@@ -22,11 +22,11 @@ export const TIME_COLUMNS: TimeColumn[] = [
 // ─── Slot Grid ────────────────────────────────────────────────────────────────
 // Cols 6 and 7 use [top, bottom] tuples for split cells
 export const SLOT_GRID: (string | null | [string | null, string | null])[][] = [
-  ["A", "B", "C", "D", null, "G", ["P", "H"], [null, "M"], "J"], // Mon
-  ["B", "C", "D", "E", null, "A", ["Q", "M"], [null, "H"], "F"], // Tue
-  ["C", "D", "E", "F", null, "B", ["R", "J"], [null, "K"], "G"], // Wed
-  ["E", "F", "G", "A", null, "D", ["S", "L"], [null, "J"], "H"], // Thu
-  ["F", "G", "A", "B", null, "C", ["T", "K"], [null, "L"], "E"], // Fri
+  ["A", "B", "C", "D", null, "G", ["P", "H"], ["P", "M"], "J"], // Mon
+  ["B", "C", "D", "E", null, "A", ["Q", "M"], ["Q", "H"], "F"], // Tue
+  ["C", "D", "E", "F", null, "B", ["R", "J"], ["R", "K"], "G"], // Wed
+  ["E", "F", "G", "A", null, "D", ["S", "L"], ["S", "J"], "H"], // Thu
+  ["F", "G", "A", "B", null, "C", ["T", "K"], ["T", "L"], "E"], // Fri
 ];
 
 // ─── Slot Occurrences ─────────────────────────────────────────────────────────

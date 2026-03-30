@@ -1,9 +1,10 @@
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 import { useFirebaseAuth } from "../hooks/useFirebaseAuth";
 
 interface LoginPageProps {
-  onLogin: () => void;
+  onLogin: (userId?: string, migrateLocal?: boolean) => void;
   onBack: () => void;
 }
 
@@ -40,19 +41,79 @@ function GoogleIcon() {
 
 export function LoginPage({ onLogin, onBack }: LoginPageProps) {
   const { signInWithGoogle, isLoading, error } = useFirebaseAuth();
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
 
   const handleLocal = () => {
     localStorage.setItem("instiflow_storage_choice", "local");
     onLogin();
   };
 
+  const LOCAL_DATA_KEYS = ["courses", "attendance", "tasks", "examEntries"];
+
+  const hasLocalData = () =>
+    LOCAL_DATA_KEYS.some((k) => {
+      try {
+        const v = localStorage.getItem(k);
+        if (!v) return false;
+        const parsed = JSON.parse(v);
+        return Array.isArray(parsed) ? parsed.length > 0 : !!parsed;
+      } catch {
+        return false;
+      }
+    });
+
   const handleGoogleSync = async () => {
-    await signInWithGoogle();
-    const stored = localStorage.getItem("instiflow_user");
-    if (stored) {
-      localStorage.setItem("instiflow_storage_choice", "sync");
-      onLogin();
+    try {
+      await signInWithGoogle();
+    } catch {
+      return;
     }
+    const stored = localStorage.getItem("instiflow_user");
+    if (!stored) return;
+    const userData = JSON.parse(stored);
+    // Grab the uid from Firebase auth directly via the stored user info
+    // We rely on useFirebaseAuth's onAuthStateChanged having set instiflow_user
+    // The uid is not in instiflow_user — we need it from a different place.
+    // Since signInWithGoogle sets state.user, we can't access it synchronously here.
+    // Instead we'll read it from window.__instiflow_uid if set, or fall back to email.
+    const uid =
+      (window as { __instiflow_uid?: string }).__instiflow_uid ||
+      userData.email ||
+      "unknown";
+
+    const wasLocal =
+      localStorage.getItem("instiflow_storage_choice") === "local";
+    if (wasLocal && hasLocalData()) {
+      setPendingUserId(uid);
+      setShowMigrationModal(true);
+    } else {
+      localStorage.setItem("instiflow_storage_choice", "sync");
+      onLogin(uid, false);
+    }
+  };
+
+  const handleKeepLocalAndUpload = () => {
+    localStorage.setItem("instiflow_storage_choice", "sync");
+    setShowMigrationModal(false);
+    onLogin(pendingUserId ?? undefined, true);
+  };
+
+  const handleStartFreshFromCloud = () => {
+    const LOCAL_DATA_KEYS_INNER = [
+      "courses",
+      "attendance",
+      "tasks",
+      "examEntries",
+      "semSettings",
+      "studentName",
+    ];
+    for (const k of LOCAL_DATA_KEYS_INNER) {
+      localStorage.removeItem(k);
+    }
+    localStorage.setItem("instiflow_storage_choice", "sync");
+    setShowMigrationModal(false);
+    onLogin(pendingUserId ?? undefined, false);
   };
 
   return (
@@ -412,7 +473,7 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
               >
                 Login with <strong style={{ color: "#a78bfa" }}>Google</strong>{" "}
                 to back up and sync your timetable, attendance, and tasks across
-                all devices.
+                all devices — phone, laptop, lab computer.
               </p>
             </div>
 
@@ -556,6 +617,134 @@ export function LoginPage({ onLogin, onBack }: LoginPageProps) {
           to { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* ── Data Migration Modal ── */}
+      <AnimatePresence>
+        {showMigrationModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            data-ocid="login.modal"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.75)",
+              backdropFilter: "blur(10px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 24,
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.88, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.88, opacity: 0, y: 20 }}
+              transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
+              style={{
+                background: "linear-gradient(135deg, #12142a 0%, #0d0f20 100%)",
+                border: "1px solid rgba(139,92,246,0.4)",
+                borderRadius: 20,
+                padding: "36px 40px",
+                maxWidth: 420,
+                width: "100%",
+                boxShadow:
+                  "0 0 60px rgba(139,92,246,0.25), 0 20px 60px rgba(0,0,0,0.6)",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 40, marginBottom: 16 }}>☁️</div>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  color: "#F0F4FF",
+                  marginBottom: 10,
+                  lineHeight: 1.3,
+                }}
+              >
+                We found locally saved data
+              </div>
+              <div
+                style={{
+                  fontSize: 14,
+                  color: "#8B95B0",
+                  marginBottom: 28,
+                  lineHeight: 1.6,
+                }}
+              >
+                You have timetable and attendance data on this device. Upload it
+                to your Google account so it syncs everywhere?
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              >
+                <motion.button
+                  type="button"
+                  data-ocid="login.confirm_button"
+                  whileTap={{ scale: 0.97 }}
+                  whileHover={{ scale: 1.02 }}
+                  onClick={handleKeepLocalAndUpload}
+                  style={{
+                    padding: "14px 20px",
+                    borderRadius: 12,
+                    background: "linear-gradient(135deg, #7C3AED, #4F46E5)",
+                    border: "none",
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 20px rgba(124,58,237,0.35)",
+                  }}
+                >
+                  Yes, upload my data to Google
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 400,
+                      opacity: 0.8,
+                      marginTop: 3,
+                    }}
+                  >
+                    Keep everything, sync across devices
+                  </div>
+                </motion.button>
+                <motion.button
+                  type="button"
+                  data-ocid="login.cancel_button"
+                  whileTap={{ scale: 0.97 }}
+                  whileHover={{ scale: 1.02 }}
+                  onClick={handleStartFreshFromCloud}
+                  style={{
+                    padding: "14px 20px",
+                    borderRadius: 12,
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#C4C9D8",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  No, start fresh
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 400,
+                      opacity: 0.7,
+                      marginTop: 3,
+                    }}
+                  >
+                    Load data from my Google account
+                  </div>
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

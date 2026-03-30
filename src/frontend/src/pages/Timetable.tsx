@@ -67,129 +67,10 @@ interface DayOverride {
   day: string;
   slot: string;
   name: string;
+  time?: string;
 }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-
-interface SlotCellProps {
-  slotLetter: string | null;
-  course: Course | null | undefined;
-  cellKey: string;
-  dayIdx: number;
-  colIdx: number;
-  mini?: boolean;
-  overrideName?: string | null;
-}
-
-function SlotCell({
-  slotLetter,
-  course,
-  cellKey,
-  dayIdx,
-  colIdx,
-  mini,
-  overrideName,
-}: SlotCellProps) {
-  const bg = course?.color ?? null;
-  const height = mini ? 26 : 54;
-  const isEmpty = !bg && !overrideName;
-  const displayName =
-    overrideName || (course ? course.code || course.name.slice(0, 7) : null);
-
-  return (
-    <motion.div
-      key={cellKey}
-      className={`tt-cell ${isEmpty ? "tt-cell-empty" : "tt-cell-filled"}`}
-      initial={{ opacity: 0, scale: 0.88 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{
-        delay: (dayIdx * 10 + colIdx) * 0.012,
-        duration: 0.28,
-        ease: "easeOut",
-      }}
-      whileHover={{ scale: 1.06, zIndex: 2 }}
-      style={{
-        height,
-        borderRadius: mini ? 5 : 7,
-        background: overrideName
-          ? "rgba(167,139,250,0.18)"
-          : bg
-            ? `${bg}cc`
-            : "rgba(255,255,255,0.06)",
-        border: overrideName
-          ? "1px solid rgba(167,139,250,0.4)"
-          : bg
-            ? `1px solid ${bg}`
-            : "1px solid rgba(255,255,255,0.1)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "2px 3px",
-        overflow: "hidden",
-        WebkitPrintColorAdjust: "exact",
-        // @ts-ignore
-        printColorAdjust: "exact",
-      }}
-    >
-      {slotLetter && (
-        <>
-          <span
-            className="tt-slot-letter"
-            style={{
-              fontSize: mini ? 9 : 12,
-              fontWeight: 800,
-              color:
-                bg || overrideName
-                  ? "rgba(0,0,0,0.7)"
-                  : "rgba(255,255,255,0.35)",
-              lineHeight: 1,
-            }}
-          >
-            {slotLetter}
-          </span>
-          {displayName && !mini && (
-            <span
-              className="tt-course-label"
-              style={{
-                fontSize: 8,
-                color: "rgba(0,0,0,0.55)",
-                textAlign: "center",
-                marginTop: 3,
-                lineHeight: 1.2,
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                paddingInline: 2,
-              }}
-            >
-              {displayName}
-            </span>
-          )}
-          {displayName && mini && (
-            <span
-              className="tt-course-label"
-              style={{
-                fontSize: 7,
-                color: "rgba(0,0,0,0.5)",
-                textAlign: "center",
-                lineHeight: 1,
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                paddingInline: 2,
-              }}
-            >
-              {displayName}
-            </span>
-          )}
-        </>
-      )}
-    </motion.div>
-  );
-}
 
 export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
   const [showForm, setShowForm] = useState(false);
@@ -214,6 +95,14 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
   const [ovDay, setOvDay] = useState(DAYS[0]);
   const [ovSlot, setOvSlot] = useState("A");
   const [ovName, setOvName] = useState("");
+  const [ovTime, setOvTime] = useState("");
+
+  // Cell delete confirmation
+  const [deleteCell, setDeleteCell] = useState<{
+    courseId?: string;
+    overrideKey?: string;
+    label: string;
+  } | null>(null);
 
   // Save/Load
   const [showSaveLoad, setShowSaveLoad] = useState(false);
@@ -232,13 +121,13 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
     return map;
   }, [courses]);
 
-  // Build override lookup: dayLabel -> slotLetter -> name
+  // Build override lookup: dayLabel -> slotLetter -> override info
   const overrideLookup = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { name: string; time?: string }>();
     for (const ov of overrides) {
       // day is full name like "Monday", convert to 3-letter
       const dayShort = ov.day.slice(0, 3).toUpperCase();
-      map.set(`${dayShort}__${ov.slot}`, ov.name);
+      map.set(`${dayShort}__${ov.slot}`, { name: ov.name, time: ov.time });
     }
     return map;
   }, [overrides]);
@@ -287,6 +176,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
       day: ovDay,
       slot: ovSlot,
       name: ovName.trim(),
+      time: ovTime.trim() || undefined,
     };
     const updated = [
       ...overrides.filter((o) => !(o.day === ovDay && o.slot === ovSlot)),
@@ -298,6 +188,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
         : overrides.filter((o) => !(o.day === ovDay && o.slot === ovSlot)),
     );
     setOvName("");
+    setOvTime("");
     setShowOverrideForm(false);
   };
 
@@ -572,6 +463,13 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                             placeholder="Override name (blank = delete slot)"
                             value={ovName}
                             onChange={(e) => setOvName(e.target.value)}
+                          />
+                          <input
+                            className="glass-input"
+                            style={{ flex: "1 1 140px", fontSize: 12 }}
+                            placeholder="Time e.g. 10:00–11:00"
+                            value={ovTime}
+                            onChange={(e) => setOvTime(e.target.value)}
                           />
                           <motion.button
                             whileTap={{ scale: 0.95 }}
@@ -1080,254 +978,442 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
         <div
           className="tt-grid-wrapper"
           style={{
-            minWidth: 760,
+            minWidth: 900,
             WebkitPrintColorAdjust: "exact",
             // @ts-ignore
             printColorAdjust: "exact",
+            fontFamily: "inherit",
           }}
         >
-          {/* Column headers */}
-          <div
+          {/* IITM Official Grid Table */}
+          <table
             style={{
-              display: "grid",
-              gridTemplateColumns: "64px repeat(9, 1fr)",
-              gap: 3,
-              marginBottom: 4,
+              width: "100%",
+              borderCollapse: "collapse",
+              tableLayout: "fixed",
             }}
           >
-            <div
-              className="tt-day-label"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 9,
-                color: "#3D4460",
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-              }}
-            >
-              DAYS
-            </div>
-            {TIME_COLUMNS.map((col, ci) => (
-              <div
-                key={col.label}
-                className="tt-time-header"
-                style={{
-                  padding: "6px 3px",
-                  textAlign: "center",
-                  fontSize: 9,
-                  color: ci === 4 ? "#2D3450" : "#6B7590",
-                  fontWeight: 600,
-                  background:
-                    ci === 4 ? "rgba(255,255,255,0.015)" : "transparent",
-                  borderRadius: 6,
-                  letterSpacing: "0.01em",
-                  lineHeight: 1.4,
-                }}
-              >
-                {col.label}
-              </div>
-            ))}
-          </div>
+            <colgroup>
+              <col style={{ width: 56 }} />
+              {TIME_COLUMNS.map((col, ci) =>
+                ci === 6 || ci === 7 ? (
+                  <col key={col.label} style={{ width: "14%" }} />
+                ) : (
+                  <col key={col.label} style={{ width: "9%" }} />
+                ),
+              )}
+            </colgroup>
 
-          {/* Day rows */}
-          {DAY_LABELS.map((dayLabel, dayIdx) => (
-            <div
-              key={dayLabel}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "64px repeat(9, 1fr)",
-                gap: 3,
-                marginBottom: 3,
-              }}
-            >
-              <div
-                className="tt-day-label"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "#6B7590",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {dayLabel}
-              </div>
-
-              {SLOT_GRID[dayIdx].map((cell, colIdx) => {
-                const cellKey = `${dayLabel}-${TIME_COLUMNS[colIdx].label}`;
-
-                if (colIdx === 4) {
-                  return (
-                    <div
-                      key={cellKey}
-                      className="tt-lunch-cell"
-                      style={{
-                        height: 54,
-                        borderRadius: 7,
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.07)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexDirection: "column",
-                        gap: 1,
-                      }}
-                    >
-                      <span style={{ fontSize: 11 }}>🍽️</span>
-                      <span
-                        style={{
-                          fontSize: 7,
-                          color: "#4D5880",
-                          fontWeight: 600,
-                          letterSpacing: "0.04em",
-                        }}
-                      >
-                        LUNCH
-                      </span>
-                    </div>
-                  );
-                }
-
-                if (Array.isArray(cell)) {
-                  const [topSlot, bottomSlot] = cell;
-                  const topCourse = topSlot ? slotToCourse.get(topSlot) : null;
-                  const bottomCourse = bottomSlot
-                    ? slotToCourse.get(bottomSlot)
-                    : null;
-                  const topOverride = topSlot
-                    ? (overrideLookup.get(`${dayLabel}__${topSlot}`) ?? null)
-                    : null;
-                  const botOverride = bottomSlot
-                    ? (overrideLookup.get(`${dayLabel}__${bottomSlot}`) ?? null)
-                    : null;
-                  return (
-                    <div
-                      key={cellKey}
-                      style={{
-                        height: 54,
-                        borderRadius: 7,
-                        overflow: "hidden",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                      }}
-                    >
-                      <SlotCell
-                        slotLetter={topSlot}
-                        course={topCourse}
-                        cellKey={`${cellKey}-top`}
-                        dayIdx={dayIdx}
-                        colIdx={colIdx}
-                        mini
-                        overrideName={topOverride}
-                      />
-                      <SlotCell
-                        slotLetter={bottomSlot}
-                        course={bottomCourse}
-                        cellKey={`${cellKey}-bot`}
-                        dayIdx={dayIdx}
-                        colIdx={colIdx + 0.5}
-                        mini
-                        overrideName={botOverride}
-                      />
-                    </div>
-                  );
-                }
-
-                const slotLetter = cell as string | null;
-                const course = slotLetter ? slotToCourse.get(slotLetter) : null;
-                const overrideName = slotLetter
-                  ? (overrideLookup.get(`${dayLabel}__${slotLetter}`) ?? null)
-                  : null;
-                const bg = course?.color ?? null;
-                const isEmpty = !bg && !overrideName;
-
-                return (
-                  <motion.div
-                    key={cellKey}
-                    className={`tt-cell ${isEmpty ? "tt-cell-empty" : "tt-cell-filled"}`}
-                    initial={{ opacity: 0, scale: 0.88 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{
-                      delay: (dayIdx * 10 + colIdx) * 0.012,
-                      duration: 0.28,
-                      ease: "easeOut",
-                    }}
-                    whileHover={{ scale: 1.06, zIndex: 2 }}
+            {/* Header Row */}
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    background: "#0d0f1a",
+                    border: "1px solid #1e2235",
+                    padding: "8px 4px",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: "#3D4460",
+                    letterSpacing: "0.1em",
+                    textAlign: "center",
+                  }}
+                >
+                  DAYS
+                </th>
+                {TIME_COLUMNS.map((col, ci) => (
+                  <th
+                    key={col.label}
                     style={{
-                      height: 54,
-                      borderRadius: 7,
-                      background: overrideName
-                        ? "rgba(167,139,250,0.18)"
-                        : bg
-                          ? `${bg}cc`
-                          : "rgba(255,255,255,0.06)",
-                      border: overrideName
-                        ? "1px solid rgba(167,139,250,0.4)"
-                        : bg
-                          ? `1px solid ${bg}`
-                          : "1px solid rgba(255,255,255,0.1)",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "3px 4px",
-                      overflow: "hidden",
-                      WebkitPrintColorAdjust: "exact",
-                      // @ts-ignore
-                      printColorAdjust: "exact",
+                      background: ci === 4 ? "#0b0d18" : "#0d0f1a",
+                      border: "1px solid #1e2235",
+                      padding: "8px 4px",
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: ci === 4 ? "#2D3450" : "#4A5270",
+                      textAlign: "center",
+                      letterSpacing: "0.01em",
+                      lineHeight: 1.4,
                     }}
                   >
-                    {slotLetter && (
-                      <>
-                        <span
-                          className="tt-slot-letter"
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            {/* Day Rows */}
+            <tbody>
+              {DAY_LABELS.map((dayLabel, dayIdx) => (
+                <tr key={dayLabel}>
+                  {/* Day label cell */}
+                  <td
+                    style={{
+                      background: "#0d0f1a",
+                      border: "1px solid #1e2235",
+                      textAlign: "center",
+                      padding: "4px 2px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#5A6280",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      height: 78,
+                    }}
+                  >
+                    {dayLabel}
+                  </td>
+
+                  {/* Time slot cells */}
+                  {SLOT_GRID[dayIdx].map((cell, colIdx) => {
+                    const cellKey = `${dayLabel}-col-${colIdx}`;
+
+                    /* ── LUNCH ── */
+                    if (colIdx === 4) {
+                      return (
+                        <td
+                          key={cellKey}
                           style={{
-                            fontSize: 12,
-                            fontWeight: 800,
-                            color:
-                              bg || overrideName
-                                ? "rgba(0,0,0,0.7)"
-                                : "rgba(255,255,255,0.35)",
-                            lineHeight: 1,
+                            background: "#0b0d18",
+                            border: "1px solid #1e2235",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            padding: 4,
+                            height: 78,
                           }}
                         >
-                          {slotLetter}
-                        </span>
-                        {(course || overrideName) && (
-                          <span
-                            className="tt-course-label"
+                          <div style={{ fontSize: 11, marginBottom: 2 }}>🍽️</div>
+                          <div
                             style={{
-                              fontSize: 8,
-                              color: "rgba(0,0,0,0.55)",
-                              textAlign: "center",
-                              marginTop: 3,
-                              lineHeight: 1.2,
-                              maxWidth: "100%",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              paddingInline: 2,
+                              fontSize: 7,
+                              color: "#2D3450",
+                              fontWeight: 700,
+                              letterSpacing: "0.08em",
                             }}
                           >
-                            {overrideName ||
-                              course?.code ||
-                              course?.name.slice(0, 7)}
-                          </span>
+                            LUNCH
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    /* ── Split afternoon cell (tuple) ── */
+                    if (Array.isArray(cell)) {
+                      const [topSlot, bottomSlot] = cell;
+                      const topCourse = topSlot
+                        ? slotToCourse.get(topSlot)
+                        : null;
+                      const bottomCourse = bottomSlot
+                        ? slotToCourse.get(bottomSlot)
+                        : null;
+                      const topOverrideInfo = topSlot
+                        ? (overrideLookup.get(`${dayLabel}__${topSlot}`) ??
+                          null)
+                        : null;
+                      const topOverride = topOverrideInfo?.name ?? null;
+                      const botOverrideInfo = bottomSlot
+                        ? (overrideLookup.get(`${dayLabel}__${bottomSlot}`) ??
+                          null)
+                        : null;
+                      const botOverride = botOverrideInfo?.name ?? null;
+
+                      const renderHalf = (
+                        slotLetter: string | null,
+                        course: Course | null | undefined,
+                        overrideName: string | null,
+                        key: string,
+                        isLab: boolean,
+                        labSlot?: string | null,
+                      ) => {
+                        const bg = course?.color ?? null;
+                        const filled = !!(bg || overrideName);
+                        // For empty bottom halves, show the lab slot letter instead
+                        const displaySlot =
+                          !isLab && !filled && labSlot ? labSlot : slotLetter;
+                        return (
+                          <div
+                            key={key}
+                            style={{
+                              flex: 1,
+                              background: overrideName
+                                ? "rgba(139,92,246,0.22)"
+                                : bg
+                                  ? bg
+                                  : "#13151f",
+                              borderBottom: "1px solid #1e2235",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "2px 3px",
+                              overflow: "hidden",
+                              WebkitPrintColorAdjust: "exact",
+                              // @ts-ignore
+                              printColorAdjust: "exact",
+                            }}
+                          >
+                            {displaySlot && (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: 8,
+                                    fontWeight: 700,
+                                    color: filled
+                                      ? "rgba(0,0,0,0.6)"
+                                      : "#2A3050",
+                                    lineHeight: 1,
+                                    display: "block",
+                                  }}
+                                >
+                                  ({displaySlot})
+                                </span>
+                                {filled && (
+                                  <>
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        fontWeight: 800,
+                                        color: "rgba(0,0,0,0.85)",
+                                        lineHeight: 1.1,
+                                        marginTop: 1,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        maxWidth: "100%",
+                                        display: "block",
+                                        textAlign: "center",
+                                      }}
+                                    >
+                                      {overrideName ||
+                                        course?.code ||
+                                        course?.name.slice(0, 6)}
+                                    </span>
+                                    {(course?.venue || course?.name) &&
+                                      !isLab && (
+                                        <span
+                                          style={{
+                                            fontSize: 7,
+                                            color: "rgba(0,0,0,0.55)",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                            maxWidth: "100%",
+                                            display: "block",
+                                            textAlign: "center",
+                                          }}
+                                        >
+                                          {course?.venue ?? ""}
+                                        </span>
+                                      )}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      };
+
+                      return (
+                        <td
+                          key={cellKey}
+                          style={{
+                            border: "1px solid #1e2235",
+                            padding: 0,
+                            height: 78,
+                            verticalAlign: "stretch",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              height: "100%",
+                            }}
+                          >
+                            {renderHalf(
+                              topSlot,
+                              topCourse,
+                              topOverride,
+                              `${cellKey}-top`,
+                              true,
+                            )}
+                            {renderHalf(
+                              bottomSlot,
+                              bottomCourse,
+                              botOverride,
+                              `${cellKey}-bot`,
+                              false,
+                              topSlot,
+                            )}
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    /* ── Normal cell ── */
+                    const slotLetter = cell as string | null;
+                    const course = slotLetter
+                      ? slotToCourse.get(slotLetter)
+                      : null;
+                    const overrideInfo = slotLetter
+                      ? (overrideLookup.get(`${dayLabel}__${slotLetter}`) ??
+                        null)
+                      : null;
+                    const overrideName = overrideInfo?.name ?? null;
+                    const overrideTime = overrideInfo?.time ?? null;
+                    const bg = course?.color ?? null;
+                    const filled = !!(bg || overrideName);
+
+                    return (
+                      <motion.td
+                        key={cellKey}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{
+                          delay: (dayIdx * 9 + colIdx) * 0.008,
+                          duration: 0.25,
+                        }}
+                        onClick={() => {
+                          if (!filled) return;
+                          if (course) {
+                            setDeleteCell({
+                              courseId: course.id,
+                              label: course.name,
+                            });
+                          } else if (overrideName && slotLetter) {
+                            setDeleteCell({
+                              overrideKey: `${dayLabel}__${slotLetter}`,
+                              label: overrideName,
+                            });
+                          }
+                        }}
+                        style={{
+                          border: "1px solid #1e2235",
+                          background: overrideName
+                            ? "rgba(139,92,246,0.22)"
+                            : (bg ?? "#13151f"),
+                          textAlign: "center",
+                          verticalAlign: "middle",
+                          padding: "4px 3px",
+                          height: 78,
+                          cursor: filled ? "pointer" : "default",
+                          WebkitPrintColorAdjust: "exact",
+                          // @ts-ignore
+                          printColorAdjust: "exact",
+                          position: "relative",
+                        }}
+                      >
+                        {slotLetter && (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 1,
+                              height: "100%",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 600,
+                                color: filled ? "rgba(0,0,0,0.55)" : "#252840",
+                                lineHeight: 1,
+                              }}
+                            >
+                              ({slotLetter})
+                            </span>
+                            {filled && (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    color: "rgba(0,0,0,0.88)",
+                                    lineHeight: 1.15,
+                                    marginTop: 2,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    maxWidth: "95%",
+                                    display: "block",
+                                  }}
+                                >
+                                  {overrideName || course?.code || ""}
+                                </span>
+                                {course?.name && (
+                                  <span
+                                    style={{
+                                      fontSize: 8,
+                                      color: "rgba(0,0,0,0.6)",
+                                      lineHeight: 1.2,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "95%",
+                                      display: "block",
+                                    }}
+                                  >
+                                    {course.name.length > 14
+                                      ? `${course.name.slice(0, 13)}…`
+                                      : course.name}
+                                  </span>
+                                )}
+                                {course?.venue && (
+                                  <span
+                                    style={{
+                                      fontSize: 8,
+                                      color: "rgba(0,0,0,0.5)",
+                                      lineHeight: 1.1,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "95%",
+                                      display: "block",
+                                    }}
+                                  >
+                                    {course.venue}
+                                  </span>
+                                )}
+                                {overrideTime && (
+                                  <span
+                                    style={{
+                                      fontSize: 7,
+                                      color: "rgba(0,0,0,0.45)",
+                                      lineHeight: 1.1,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "95%",
+                                      display: "block",
+                                    }}
+                                  >
+                                    ⏰ {overrideTime}
+                                  </span>
+                                )}
+                                {filled && (
+                                  <span
+                                    style={{
+                                      fontSize: 7,
+                                      color: "rgba(0,0,0,0.35)",
+                                      marginTop: 1,
+                                    }}
+                                  >
+                                    tap to remove
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
                         )}
-                      </>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-          ))}
+                      </motion.td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           {/* Legend */}
           {courses.length > 0 && (
@@ -1511,6 +1597,103 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
           </div>
         )}
       </GlassCard>
+
+      {/* ── Delete cell confirmation modal ── */}
+      <AnimatePresence>
+        {deleteCell && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              backdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+            }}
+            onClick={() => setDeleteCell(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "linear-gradient(135deg, #12142a 0%, #0d0f20 100%)",
+                border: "1px solid rgba(139,92,246,0.35)",
+                borderRadius: 16,
+                padding: "28px 32px",
+                minWidth: 300,
+                boxShadow: "0 0 40px rgba(139,92,246,0.2)",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 24, marginBottom: 12 }}>🗑️</div>
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: "#F0F4FF",
+                  marginBottom: 6,
+                }}
+              >
+                Remove this class?
+              </div>
+              <div style={{ fontSize: 13, color: "#6B7590", marginBottom: 24 }}>
+                {deleteCell.label}
+              </div>
+              <div
+                style={{ display: "flex", gap: 10, justifyContent: "center" }}
+              >
+                <motion.button
+                  data-ocid="timetable.cancel_button"
+                  whileTap={{ scale: 0.96 }}
+                  className="glass-btn"
+                  style={{ padding: "9px 20px", fontSize: 13 }}
+                  onClick={() => setDeleteCell(null)}
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  data-ocid="timetable.delete_button"
+                  whileTap={{ scale: 0.96 }}
+                  className="btn-gradient"
+                  style={{
+                    padding: "9px 20px",
+                    fontSize: 13,
+                    background: "linear-gradient(135deg,#e05555,#c04040)",
+                  }}
+                  onClick={() => {
+                    if (deleteCell.courseId) {
+                      onDeleteCourse(deleteCell.courseId);
+                    } else if (deleteCell.overrideKey) {
+                      // overrideKey is "DAYSHORT__SLOT", find and remove matching override
+                      const [dayShort, slot] =
+                        deleteCell.overrideKey.split("__");
+                      const fullDay = DAYS.find(
+                        (d) => d.slice(0, 3).toUpperCase() === dayShort,
+                      );
+                      saveOverrides(
+                        overrides.filter(
+                          (o) => !(o.day === fullDay && o.slot === slot),
+                        ),
+                      );
+                    }
+                    setDeleteCell(null);
+                  }}
+                >
+                  Remove
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

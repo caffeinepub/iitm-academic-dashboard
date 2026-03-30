@@ -77,7 +77,7 @@ export function getSemCalendar(year: number, semType: SemType): SemCalendar {
       year,
       semType,
       classStart: `${y}-01-06`,
-      classEnd: `${y}-04-30`,
+      classEnd: `${y}-05-10`,
       quiz1Start: `${y}-02-16`,
       quiz1End: `${y}-02-20`,
       quiz2Start: `${y}-03-23`,

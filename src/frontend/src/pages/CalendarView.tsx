@@ -81,7 +81,11 @@ export function CalendarView({ courses, tasks, semSettings }: Props) {
     const dow = new Date(year, month, d).getDay();
     const dots: string[] = [];
     if (isHoliday(ds, holidays)) dots.push("rgba(242,201,76,0.8)");
-    if (getClassesOnDay(dow, courses).length > 0 && !isHoliday(ds, holidays))
+    if (
+      getClassesOnDay(dow, courses).length > 0 &&
+      !isHoliday(ds, holidays) &&
+      ds <= cal.classEnd
+    )
       dots.push("#6366f1");
     if (tasks.some((t) => t.date === ds)) dots.push("#8b5cf6");
     if (isExamPeriod(ds, cal)) dots.push("#06b6d4");
@@ -98,6 +102,10 @@ export function CalendarView({ courses, tasks, semSettings }: Props) {
     ? isHoliday(selectedDate, holidays)
     : undefined;
   const selExam = selectedDate ? isExamPeriod(selectedDate, cal) : null;
+
+  const isAfterClassEnd = selectedDate ? selectedDate > cal.classEnd : false;
+  const isLastDayOfClasses = selectedDate === cal.classEnd;
+  const showClasses = selClasses.length > 0 && !isAfterClassEnd;
 
   // Build padding cells with stable keys derived from year/month
   const padKeys = Array.from(
@@ -337,6 +345,22 @@ export function CalendarView({ courses, tasks, semSettings }: Props) {
                   )}
                 </div>
 
+                {isLastDayOfClasses && (
+                  <div
+                    style={{
+                      color: "#a78bfa",
+                      fontSize: 13,
+                      marginBottom: 10,
+                      padding: "8px 12px",
+                      background: "rgba(139,92,246,0.1)",
+                      borderRadius: 9,
+                      border: "1px solid rgba(139,92,246,0.3)",
+                    }}
+                  >
+                    🎓 Last Day of Classes
+                  </div>
+                )}
+
                 {selHoliday && (
                   <div
                     style={{
@@ -375,7 +399,7 @@ export function CalendarView({ courses, tasks, semSettings }: Props) {
                   </div>
                 )}
 
-                {selClasses.length > 0 && (
+                {showClasses && (
                   <div style={{ marginBottom: 14 }}>
                     <div
                       style={{
@@ -460,13 +484,15 @@ export function CalendarView({ courses, tasks, semSettings }: Props) {
 
                 {!selHoliday &&
                   !selExam &&
-                  selClasses.length === 0 &&
+                  !showClasses &&
                   selTasks.length === 0 && (
                     <div
                       data-ocid="calendar.empty_state"
                       style={{ color: "#3D4460", fontSize: 13 }}
                     >
-                      Nothing scheduled.
+                      {isAfterClassEnd
+                        ? "No classes — semester ended."
+                        : "Nothing scheduled."}
                     </div>
                   )}
               </GlassCard>

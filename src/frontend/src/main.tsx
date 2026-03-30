@@ -14,6 +14,15 @@ declare global {
   }
 }
 
+// Register service worker for PWA / offline support
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // SW registration failure is non-fatal
+    });
+  });
+}
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -863,7 +863,6 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
                     </motion.button>
                   </div>
                   {form.holidays.map((h, idx) => (
-                    // biome-ignore lint/correctness/useJsxKeyInIterable: holiday entries use index as stable key
                     <div
                       key={`h-${h.date}-${h.name}-${idx}`}
                       style={{

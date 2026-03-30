@@ -16,9 +16,13 @@ export function useFirebaseAuth() {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        // Store uid globally so LoginPage can access it synchronously
+        (window as { __instiflow_uid?: string }).__instiflow_uid =
+          firebaseUser.uid;
         localStorage.setItem(
           "instiflow_user",
           JSON.stringify({
+            uid: firebaseUser.uid,
             name: firebaseUser.displayName,
             email: firebaseUser.email,
             photoURL: firebaseUser.photoURL,
@@ -35,9 +39,12 @@ export function useFirebaseAuth() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const u = result.user;
+      // Store uid globally for immediate access
+      (window as { __instiflow_uid?: string }).__instiflow_uid = u.uid;
       localStorage.setItem(
         "instiflow_user",
         JSON.stringify({
+          uid: u.uid,
           name: u.displayName,
           email: u.email,
           photoURL: u.photoURL,
@@ -50,6 +57,7 @@ export function useFirebaseAuth() {
           ? err.message
           : "Sign-in failed. Please try again.";
       setError(msg);
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -58,6 +66,7 @@ export function useFirebaseAuth() {
   const signOut = async () => {
     await firebaseSignOut(auth);
     localStorage.removeItem("instiflow_user");
+    (window as { __instiflow_uid?: string }).__instiflow_uid = undefined;
     setUser(null);
   };
 
