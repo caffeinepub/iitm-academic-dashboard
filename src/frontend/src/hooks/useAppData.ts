@@ -2,13 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type {
   AttendanceRecord,
   Course,
-  EveningSlot,
   ExamEntry,
-  NotificationPrefs,
   SemSettings,
   Task,
 } from "../types";
-import { DEFAULT_NOTIFICATION_PREFS } from "../types";
 import {
   type FirestoreData,
   loadFromFirestore,
@@ -155,18 +152,6 @@ export function useAppData({
     getItem<ExamEntry[]>("examEntries", []),
   );
 
-  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(
-    () =>
-      getItem<NotificationPrefs>(
-        "notificationPrefs",
-        DEFAULT_NOTIFICATION_PREFS,
-      ),
-  );
-
-  const [eveningSlots, setEveningSlots] = useState<EveningSlot[]>(() =>
-    getItem<EveningSlot[]>("eveningSlots", []),
-  );
-
   // ── Cloud load on mount (sync mode only) ──────────────────────────────────
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect
   useEffect(() => {
@@ -230,13 +215,6 @@ export function useAppData({
   useEffect(() => {
     setItem("examEntries", examEntries);
   }, [examEntries]);
-
-  useEffect(() => {
-    setItem("notificationPrefs", notificationPrefs);
-  }, [notificationPrefs]);
-  useEffect(() => {
-    setItem("eveningSlots", eveningSlots);
-  }, [eveningSlots]);
 
   // ── Firestore sync (debounced, only in sync mode) ─────────────────────────
   useEffect(() => {
@@ -326,13 +304,6 @@ export function useAppData({
     );
   };
 
-  const addEveningSlot = (slot: Omit<EveningSlot, "id">) => {
-    setEveningSlots((prev) => [...prev, { ...slot, id: crypto.randomUUID() }]);
-  };
-  const deleteEveningSlot = (id: string) => {
-    setEveningSlots((prev) => prev.filter((s) => s.id !== id));
-  };
-
   return {
     isCloudLoading,
     courses,
@@ -355,10 +326,5 @@ export function useAppData({
     deleteExamEntry,
     setExamOverride,
     clearExamOverride,
-    notificationPrefs,
-    setNotificationPrefs,
-    eveningSlots,
-    addEveningSlot,
-    deleteEveningSlot,
   };
 }
