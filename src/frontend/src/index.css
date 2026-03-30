@@ -353,6 +353,8 @@ input[type="number"].glass-input {
 
 /* ─── Landing Page ────────────────────────────────────────────────────────── */
 .landing-root {
+  min-height: 100vh;
+  overflow-x: hidden;
   background: #06080f;
   color: #f0f4ff;
   font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
@@ -735,6 +737,17 @@ spline-viewer #logo {
   line-height: 1.65;
   color: rgba(169, 184, 208, 0.65);
 }
+.landing-features-scroll-hint {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: rgba(167, 139, 250, 0.7);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
 
 /* Final CTA section */
 .landing-final-cta {
@@ -1008,5 +1021,36 @@ spline-viewer [id*="logo"] {
   .tt-grid-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Landing page: features horizontal scroll on mobile */
+  .landing-features-grid {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    gap: 14px;
+    padding-bottom: 16px;
+    padding-right: 4px;
+  }
+  .landing-feature-card {
+    min-width: 240px;
+    max-width: 240px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+  .landing-features-scroll-hint {
+    display: flex !important;
+  }
+
+  /* Landing page: hero fullscreen reliable on mobile */
+  .landing-hero-fullscreen {
+    min-height: 100svh;
+  }
+
+  /* Calendar: stack layout on mobile, detail panel full width */
+  .calendar-layout-grid {
+    grid-template-columns: 1fr !important;
   }
 }

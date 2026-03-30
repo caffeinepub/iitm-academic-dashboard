@@ -384,6 +384,25 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
         >
           Everything you need
         </motion.h2>
+        {/* Mobile horizontal scroll hint */}
+        <div
+          className="landing-features-scroll-hint"
+          style={{
+            display: "none",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            marginBottom: 10,
+            fontSize: 11,
+            color: "rgba(167,139,250,0.7)",
+            fontWeight: 500,
+            letterSpacing: "0.04em",
+          }}
+        >
+          <span>&#8592;</span>
+          <span>Swipe to see all features</span>
+          <span>&#8594;</span>
+        </div>
         <div className="landing-features-grid">
           {[
             {
