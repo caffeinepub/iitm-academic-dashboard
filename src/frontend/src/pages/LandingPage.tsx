@@ -88,14 +88,23 @@ export function LandingPage({ onEnter }: LandingPageProps) {
       if (fallbackTimer !== null) {
         clearTimeout(fallbackTimer);
       }
-      const el = splineContainerRef.current;
-      if (viewer && el && el.contains(viewer)) {
+      // Aggressively remove spline viewer on cleanup
+      const splineEl = document.querySelector("spline-viewer");
+      if (splineEl) {
         try {
-          el.removeChild(viewer);
+          splineEl.remove();
         } catch {
-          // ignore
+          /* ignore */
         }
       }
+      if (splineContainerRef.current) {
+        try {
+          splineContainerRef.current.innerHTML = "";
+        } catch {
+          /* ignore */
+        }
+      }
+      viewer = null;
     };
   }, []);
 
@@ -106,11 +115,23 @@ export function LandingPage({ onEnter }: LandingPageProps) {
   }, []);
 
   const handleEnter = useCallback(() => {
-    // Hide Spline WebGL before triggering exit animation to prevent browser freeze
     setLeaving(true);
-    setTimeout(() => {
-      onEnter();
-    }, 80);
+    // Aggressively destroy the WebGL context before transitioning
+    const splineEl = document.querySelector("spline-viewer");
+    if (splineEl) {
+      splineEl.remove();
+    }
+    if (splineContainerRef.current) {
+      splineContainerRef.current.innerHTML = "";
+    }
+    // Wait for browser to reclaim WebGL resources before React state change
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          onEnter();
+        }, 100);
+      });
+    });
   }, [onEnter]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
