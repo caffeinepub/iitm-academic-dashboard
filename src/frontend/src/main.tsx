@@ -14,6 +14,20 @@ declare global {
   }
 }
 
+// ── Register Service Worker for background notifications ──────────────────
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => {
+        console.log("[InstiFlow] SW registered:", reg.scope);
+      })
+      .catch((err) => {
+        console.warn("[InstiFlow] SW registration failed:", err);
+      });
+  });
+}
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

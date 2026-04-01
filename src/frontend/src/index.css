@@ -1054,3 +1054,8 @@ spline-viewer [id*="logo"] {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ─── Hide scrollbar utility ──────────────────────────────────────────────── */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

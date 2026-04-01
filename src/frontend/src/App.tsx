@@ -31,6 +31,16 @@ import { TasksView } from "./pages/TasksView";
 import { Timetable } from "./pages/Timetable";
 import { TodayDashboard } from "./pages/TodayDashboard";
 
+const TAB_ORDER: TabId[] = [
+  "today",
+  "timetable",
+  "attendance",
+  "calendar",
+  "exams",
+  "tasks",
+  "settings",
+];
+
 const TAB_LABELS: Record<TabId, string> = {
   today: "Today",
   timetable: "Timetable",
@@ -51,6 +61,25 @@ const BOTTOM_NAV_ITEMS = [
   { id: "settings" as TabId, label: "Settings", Icon: Settings2 },
 ];
 
+// ── Helpers to restore session from localStorage ──────────────────────────
+function getStoredChoice(): "local" | "sync" | null {
+  return localStorage.getItem("instiflow_storage_choice") as
+    | "local"
+    | "sync"
+    | null;
+}
+
+function getStoredUid(): string | undefined {
+  try {
+    const raw = localStorage.getItem("instiflow_user");
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as { uid?: string };
+    return parsed.uid || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   useEffect(() => {
@@ -63,7 +92,11 @@ function useIsMobile() {
 }
 
 export default function App() {
-  const [showLanding, setShowLanding] = useState(true);
+  // ── Restore session on refresh ─────────────────────────────────────────────
+  // If user previously chose a storage mode, skip the landing/login flow.
+  const choice = getStoredChoice();
+
+  const [showLanding, setShowLanding] = useState(() => !choice);
   const [showLogin, setShowLogin] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("today");
@@ -71,13 +104,54 @@ export default function App() {
 
   const isMobile = useIsMobile();
 
-  // Sync state — set after login choice
-  const [userId, setUserId] = useState<string | undefined>(undefined);
-  const [storageMode, setStorageMode] = useState<"local" | "sync">("local");
+  // Sync state — restored from localStorage or set after login choice
+  const [userId, setUserId] = useState<string | undefined>(() =>
+    choice === "sync" ? getStoredUid() : undefined,
+  );
+  const [storageMode, setStorageMode] = useState<"local" | "sync">(() =>
+    choice === "sync" ? "sync" : "local",
+  );
   const [migrateLocal, setMigrateLocal] = useState(false);
+
+  // For sync users, re-validate Firebase auth on mount (handles sign-out on other devices)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect, choice is stable
+  useEffect(() => {
+    if (getStoredChoice() !== "sync") return;
+
+    let cancelled = false;
+    import("./lib/firebase").then(({ firebaseAuth }) => {
+      import("firebase/auth").then(({ onAuthStateChanged }) => {
+        const auth = firebaseAuth();
+        const unsub = onAuthStateChanged(auth, (user) => {
+          if (cancelled) return;
+          unsub();
+          if (user) {
+            // Firebase confirms user is still logged in
+            setUserId(user.uid);
+            setStorageMode("sync");
+            setShowLanding(false);
+            setShowLogin(false);
+          } else {
+            // Firebase says session expired — ask to re-login
+            localStorage.removeItem("instiflow_storage_choice");
+            localStorage.removeItem("instiflow_user");
+            setShowLanding(false);
+            setShowLogin(true);
+          }
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const data = useAppData({ userId, storageMode, migrateLocal });
   const theme = TAB_THEMES[activeTab];
+
+  // ── Slide animation direction tracking ────────────────────────────────────
+  const prevTabRef = useRef<TabId>("today");
+  const [slideDir, setSlideDir] = useState(0);
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -135,6 +209,10 @@ export default function App() {
   };
 
   const handleTabChange = (t: TabId) => {
+    const prevIdx = TAB_ORDER.indexOf(prevTabRef.current);
+    const nextIdx = TAB_ORDER.indexOf(t);
+    setSlideDir(nextIdx > prevIdx ? 1 : -1);
+    prevTabRef.current = t;
     setActiveTab(t);
     if (isMobile) setSidebarOpen(false);
   };
@@ -408,13 +486,31 @@ export default function App() {
                       paddingBottom: isMobile ? 72 : 0,
                     }}
                   >
-                    <AnimatePresence mode="wait">
+                    <AnimatePresence mode="wait" custom={slideDir}>
                       <motion.div
                         key={activeTab}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.25 }}
+                        custom={slideDir}
+                        variants={{
+                          initial: (dir: number) => ({
+                            opacity: 0,
+                            x: dir * 28,
+                          }),
+                          animate: {
+                            opacity: 1,
+                            x: 0,
+                          },
+                          exit: (dir: number) => ({
+                            opacity: 0,
+                            x: dir * -28,
+                          }),
+                        }}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={{
+                          duration: 0.32,
+                          ease: [0.25, 0.46, 0.45, 0.94],
+                        }}
                         style={{ width: "100%" }}
                       >
                         {renderContent()}

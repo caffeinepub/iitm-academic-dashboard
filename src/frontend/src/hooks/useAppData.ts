@@ -10,10 +10,12 @@ import {
   type FirestoreData,
   loadFromFirestore,
   saveToFirestore,
+  subscribeToFirestore,
 } from "../utils/firestoreSync";
 import { autoDetectSem } from "../utils/semester";
 import { getItem, setItem } from "../utils/storage";
 
+// ── Sample data (only shown to brand-new LOCAL users) ─────────────────────
 const SAMPLE_COURSES: Course[] = [
   {
     id: "1",
@@ -92,28 +94,35 @@ export function useAppData({
   storageMode = "local",
   migrateLocal = false,
 }: UseAppDataOptions = {}) {
-  const [isCloudLoading, setIsCloudLoading] = useState(
-    storageMode === "sync" && !!userId,
-  );
+  const isSync = storageMode === "sync" && !!userId;
+  const [isCloudLoading, setIsCloudLoading] = useState(isSync);
 
   // Ref to suppress Firestore writes during initial cloud load
   const suppressSaveUntil = useRef(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track if we're receiving updates from onSnapshot (to avoid echo-back saves)
+  const receivingSnapshot = useRef(false);
 
+  // ── Initial state ────────────────────────────────────────────────────────
+  // For SYNC users: start from localStorage (may be empty) — Firestore will
+  // overwrite immediately. Never show sample data to sync users.
+  // For LOCAL users: show sample data only if localStorage is also empty.
   const [courses, setCourses] = useState<Course[]>(() => {
     const stored = getItem<Course[]>("courses", []);
-    if (stored.length === 0) return SAMPLE_COURSES;
+    if (stored.length === 0 && !isSync) return SAMPLE_COURSES;
     return stored;
   });
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => {
     const stored = getItem<AttendanceRecord[]>("attendance", []);
-    if (stored.length === 0) return genSampleAttendance();
+    if (stored.length === 0 && !isSync) return genSampleAttendance();
     return stored;
   });
 
-  const [tasks, setTasks] = useState<Task[]>(() =>
-    getItem<Task[]>("tasks", [
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const stored = getItem<Task[]>("tasks", []);
+    if (stored.length > 0 || isSync) return stored;
+    return [
       {
         id: "t1",
         title: "Submit MA3201 Assignment",
@@ -133,8 +142,8 @@ export function useAppData({
         date: "2026-02-15",
         completed: false,
       },
-    ]),
-  );
+    ];
+  });
 
   const [semSettings, setSemSettings] = useState<SemSettings>(() =>
     getItem<SemSettings>("semSettings", {
@@ -155,23 +164,25 @@ export function useAppData({
   // ── Cloud load on mount (sync mode only) ──────────────────────────────────
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect
   useEffect(() => {
-    if (storageMode !== "sync" || !userId) return;
+    if (!isSync) return;
 
-    const loadCloud = async () => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initCloud = async () => {
       try {
-        const cloudData = await loadFromFirestore(userId);
+        const cloudData = await loadFromFirestore(userId!);
         if (cloudData) {
-          // Suppress Firestore writes for 3s while we apply cloud data
-          suppressSaveUntil.current = Date.now() + 3000;
-          if (cloudData.courses?.length) setCourses(cloudData.courses);
-          if (cloudData.attendance?.length) setAttendance(cloudData.attendance);
-          if (cloudData.tasks?.length) setTasks(cloudData.tasks);
+          // Suppress any save that might be triggered by these state updates
+          suppressSaveUntil.current = Date.now() + 5000;
+          // Always apply cloud data (even empty arrays — user may have cleared them)
+          setCourses(cloudData.courses ?? []);
+          setAttendance(cloudData.attendance ?? []);
+          setTasks(cloudData.tasks ?? []);
           if (cloudData.semSettings) setSemSettings(cloudData.semSettings);
           if (cloudData.studentName) setStudentName(cloudData.studentName);
-          if (cloudData.examEntries?.length)
-            setExamEntries(cloudData.examEntries);
+          setExamEntries(cloudData.examEntries ?? []);
         } else if (migrateLocal) {
-          // No cloud doc yet — push local data up immediately
+          // New sync user — push existing local data to Firestore
           const localData: FirestoreData = {
             courses: getItem<Course[]>("courses", SAMPLE_COURSES),
             attendance: getItem<AttendanceRecord[]>("attendance", []),
@@ -184,19 +195,58 @@ export function useAppData({
             studentName: getItem<string>("studentName", "Scholar"),
             examEntries: getItem<ExamEntry[]>("examEntries", []),
           };
-          await saveToFirestore(userId, localData);
+          await saveToFirestore(userId!, localData);
+          // Apply local data to state (it's already there, but ensure consistency)
+          setCourses(localData.courses);
+          setAttendance(localData.attendance);
+          setTasks(localData.tasks);
+          setSemSettings(
+            localData.semSettings ?? {
+              year: new Date().getFullYear(),
+              semType: autoDetectSem(),
+              overridden: false,
+            },
+          );
+          setStudentName(localData.studentName);
+          setExamEntries(localData.examEntries);
         }
+        // else: brand new sync user with no data — start with empty state
       } catch (e) {
         console.warn("Firestore load failed, using local data:", e);
       } finally {
         setIsCloudLoading(false);
       }
+
+      // Subscribe to real-time updates from other devices
+      try {
+        unsubscribe = subscribeToFirestore(userId!, (data) => {
+          if (receivingSnapshot.current) return;
+          receivingSnapshot.current = true;
+          suppressSaveUntil.current = Date.now() + 3000;
+          // Always update state from snapshot, even empty arrays
+          setCourses(data.courses ?? []);
+          setAttendance(data.attendance ?? []);
+          setTasks(data.tasks ?? []);
+          if (data.semSettings) setSemSettings(data.semSettings);
+          if (data.studentName) setStudentName(data.studentName);
+          setExamEntries(data.examEntries ?? []);
+          setTimeout(() => {
+            receivingSnapshot.current = false;
+          }, 200);
+        });
+      } catch (e) {
+        console.warn("Firestore onSnapshot failed:", e);
+      }
     };
 
-    loadCloud();
+    initCloud();
+
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 
-  // ── localStorage persistence ───────────────────────────────────────────────
+  // ── localStorage persistence (always, for offline resilience) ──────────────
   useEffect(() => {
     setItem("courses", courses);
   }, [courses]);
@@ -218,12 +268,16 @@ export function useAppData({
 
   // ── Firestore sync (debounced, only in sync mode) ─────────────────────────
   useEffect(() => {
-    if (storageMode !== "sync" || !userId) return;
+    if (!isSync) return;
+    if (receivingSnapshot.current) return;
     if (Date.now() < suppressSaveUntil.current) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      saveToFirestore(userId, {
+      // Double-check guards inside the timeout (timing can shift)
+      if (receivingSnapshot.current) return;
+      if (Date.now() < suppressSaveUntil.current) return;
+      saveToFirestore(userId!, {
         courses,
         attendance,
         tasks,
@@ -243,7 +297,7 @@ export function useAppData({
     semSettings,
     studentName,
     examEntries,
-    storageMode,
+    isSync,
     userId,
   ]);
 
