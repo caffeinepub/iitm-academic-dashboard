@@ -114,7 +114,6 @@ export default function App() {
   const [migrateLocal, setMigrateLocal] = useState(false);
 
   // For sync users, re-validate Firebase auth on mount (handles sign-out on other devices)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect, choice is stable
   useEffect(() => {
     if (getStoredChoice() !== "sync") return;
 
