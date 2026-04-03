@@ -1434,25 +1434,13 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
 
                     /* ── Split afternoon cell (tuple) ── */
                     if (Array.isArray(cell)) {
-                      // col 7 is covered by the colSpan=2 from col 6 — skip it
-                      if (colIdx === 7) return null;
-
                       const [topSlot, bottomSlot] = cell;
-                      const col7cell = SLOT_GRID[dayIdx][7] as
-                        | [string | null, string | null]
-                        | null;
-                      const bottomSlot7 = Array.isArray(col7cell)
-                        ? col7cell[1]
-                        : null;
 
                       const topCourse = topSlot
                         ? slotToCourse.get(topSlot)
                         : null;
                       const bottomCourse = bottomSlot
                         ? slotToCourse.get(bottomSlot)
-                        : null;
-                      const bottomCourse7 = bottomSlot7
-                        ? slotToCourse.get(bottomSlot7)
                         : null;
 
                       const topOverrideInfo = topSlot
@@ -1468,12 +1456,6 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                         : null;
                       const botOverride = botOverrideInfo?.name ?? null;
 
-                      const botOverrideInfo7 = bottomSlot7
-                        ? (overrideLookup.get(`${dayLabel}__${bottomSlot7}`) ??
-                          null)
-                        : null;
-                      const botOverride7 = botOverrideInfo7?.name ?? null;
-
                       const topBg = topCourse?.color ?? null;
                       const topFilled = !!(topCourse || topBg || topOverride);
 
@@ -1484,18 +1466,9 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                         botOverride
                       );
 
-                      const botBg7 = bottomCourse7?.color ?? null;
-                      const botFilled7 = !!(
-                        bottomCourse7 ||
-                        botBg7 ||
-                        botOverride7
-                      );
-
-                      // Col 6: render as colSpan=2 with nested table
                       return (
                         <td
                           key={cellKey}
-                          colSpan={2}
                           style={{
                             border: "1px solid #1e2235",
                             padding: 0,
@@ -1512,9 +1485,8 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                           >
                             <tbody>
                               <tr>
-                                {/* Merged P/Q/R/S/T top cell — full width */}
+                                {/* Top half */}
                                 <td
-                                  colSpan={2}
                                   onClick={() => {
                                     if (!topFilled) return;
                                     if (topCourse) {
@@ -1578,7 +1550,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                         <>
                                           <span
                                             style={{
-                                              fontSize: 11,
+                                              fontSize: 9,
                                               fontWeight: 800,
                                               color: "rgba(0,0,0,0.85)",
                                               lineHeight: 1.1,
@@ -1593,37 +1565,37 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                           >
                                             {topOverride ||
                                               topCourse?.code ||
-                                              topCourse?.name.slice(0, 8)}
+                                              topCourse?.name?.slice(0, 6)}
                                           </span>
                                           {topCourse?.name && (
                                             <span
                                               style={{
-                                                fontSize: 8,
-                                                color: "rgba(0,0,0,0.7)",
-                                                lineHeight: 1.1,
+                                                fontSize: 7,
+                                                color: "rgba(0,0,0,0.55)",
                                                 overflow: "hidden",
                                                 textOverflow: "ellipsis",
                                                 whiteSpace: "nowrap",
-                                                maxWidth: "95%",
+                                                maxWidth: "100%",
                                                 display: "block",
+                                                textAlign: "center",
                                               }}
                                             >
-                                              {topCourse.name.length > 16
-                                                ? `${topCourse.name.slice(0, 15)}…`
+                                              {topCourse.name.length > 10
+                                                ? `${topCourse.name.slice(0, 9)}…`
                                                 : topCourse.name}
                                             </span>
                                           )}
                                           {topCourse?.venue && (
                                             <span
                                               style={{
-                                                fontSize: 8,
-                                                color: "rgba(0,0,0,0.5)",
-                                                lineHeight: 1.1,
+                                                fontSize: 6,
+                                                color: "rgba(0,0,0,0.45)",
                                                 overflow: "hidden",
                                                 textOverflow: "ellipsis",
                                                 whiteSpace: "nowrap",
-                                                maxWidth: "95%",
+                                                maxWidth: "100%",
                                                 display: "block",
+                                                textAlign: "center",
                                               }}
                                             >
                                               {topCourse.venue}
@@ -1632,10 +1604,9 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                           {topOverrideTime && (
                                             <span
                                               style={{
-                                                fontSize: 7,
-                                                color: "rgba(0,0,0,0.45)",
-                                                lineHeight: 1.1,
-                                                display: "block",
+                                                fontSize: 6,
+                                                color: "rgba(0,0,0,0.4)",
+                                                lineHeight: 1,
                                               }}
                                             >
                                               ⏰ {topOverrideTime}
@@ -1658,7 +1629,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                 </td>
                               </tr>
                               <tr>
-                                {/* Bottom half col 6 */}
+                                {/* Bottom half */}
                                 <td
                                   onClick={() => {
                                     if (!botFilled) return;
@@ -1692,9 +1663,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                   }}
                                   style={{
                                     height: "50%",
-                                    width: "50%",
                                     borderTop: "1px solid #1e2235",
-                                    borderRight: "1px solid #1e2235",
                                     background: botOverride
                                       ? "rgba(139,92,246,0.22)"
                                       : (botBg ?? "#13151f"),
@@ -1741,7 +1710,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                           >
                                             {botOverride ||
                                               bottomCourse?.code ||
-                                              bottomCourse?.name.slice(0, 6)}
+                                              bottomCourse?.name?.slice(0, 6)}
                                           </span>
                                           {bottomCourse?.name && (
                                             <span
@@ -1756,7 +1725,9 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                                 textAlign: "center",
                                               }}
                                             >
-                                              {bottomCourse.name.slice(0, 10)}
+                                              {bottomCourse.name.length > 10
+                                                ? `${bottomCourse.name.slice(0, 9)}…`
+                                                : bottomCourse.name}
                                             </span>
                                           )}
                                           {bottomCourse?.venue && (
@@ -1775,127 +1746,16 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                                               {bottomCourse.venue}
                                             </span>
                                           )}
-                                        </>
-                                      )}
-                                    </>
-                                  )}
-                                </td>
-                                {/* Bottom half col 7 */}
-                                <td
-                                  onClick={() => {
-                                    if (!botFilled7) return;
-                                    if (bottomCourse7) {
-                                      setDeleteCell({
-                                        courseId: bottomCourse7.id,
-                                        label: bottomCourse7.name,
-                                      });
-                                    } else if (botOverride7 && bottomSlot7) {
-                                      setDeleteCell({
-                                        overrideKey: `${dayLabel}__${bottomSlot7}`,
-                                        label: botOverride7,
-                                      });
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      if (!botFilled7) return;
-                                      if (bottomCourse7) {
-                                        setDeleteCell({
-                                          courseId: bottomCourse7.id,
-                                          label: bottomCourse7.name,
-                                        });
-                                      } else if (botOverride7 && bottomSlot7) {
-                                        setDeleteCell({
-                                          overrideKey: `${dayLabel}__${bottomSlot7}`,
-                                          label: botOverride7,
-                                        });
-                                      }
-                                    }
-                                  }}
-                                  style={{
-                                    height: "50%",
-                                    width: "50%",
-                                    borderTop: "1px solid #1e2235",
-                                    background: botOverride7
-                                      ? "rgba(139,92,246,0.22)"
-                                      : (botBg7 ?? "#13151f"),
-                                    textAlign: "center",
-                                    verticalAlign: "middle",
-                                    padding: "2px 3px",
-                                    cursor: botFilled7 ? "pointer" : "default",
-                                    WebkitPrintColorAdjust: "exact",
-                                    // @ts-ignore
-                                    printColorAdjust: "exact",
-                                  }}
-                                >
-                                  {bottomSlot7 && (
-                                    <>
-                                      <span
-                                        style={{
-                                          fontSize: 8,
-                                          fontWeight: 700,
-                                          color: botFilled7
-                                            ? "rgba(0,0,0,0.6)"
-                                            : "#2A3050",
-                                          lineHeight: 1,
-                                          display: "block",
-                                        }}
-                                      >
-                                        ({bottomSlot7})
-                                      </span>
-                                      {botFilled7 && (
-                                        <>
                                           <span
+                                            className="print-hide"
                                             style={{
-                                              fontSize: 9,
-                                              fontWeight: 800,
-                                              color: "rgba(0,0,0,0.85)",
-                                              lineHeight: 1.1,
+                                              fontSize: 7,
+                                              color: "rgba(0,0,0,0.35)",
                                               marginTop: 1,
-                                              overflow: "hidden",
-                                              textOverflow: "ellipsis",
-                                              whiteSpace: "nowrap",
-                                              maxWidth: "100%",
-                                              display: "block",
-                                              textAlign: "center",
                                             }}
                                           >
-                                            {botOverride7 ||
-                                              bottomCourse7?.code ||
-                                              bottomCourse7?.name.slice(0, 6)}
+                                            tap to remove
                                           </span>
-                                          {bottomCourse7?.name && (
-                                            <span
-                                              style={{
-                                                fontSize: 7,
-                                                color: "rgba(0,0,0,0.55)",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                whiteSpace: "nowrap",
-                                                maxWidth: "100%",
-                                                display: "block",
-                                                textAlign: "center",
-                                              }}
-                                            >
-                                              {bottomCourse7.name.slice(0, 10)}
-                                            </span>
-                                          )}
-                                          {bottomCourse7?.venue && (
-                                            <span
-                                              style={{
-                                                fontSize: 6,
-                                                color: "rgba(0,0,0,0.45)",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                whiteSpace: "nowrap",
-                                                maxWidth: "100%",
-                                                display: "block",
-                                                textAlign: "center",
-                                              }}
-                                            >
-                                              {bottomCourse7.venue}
-                                            </span>
-                                          )}
                                         </>
                                       )}
                                     </>
@@ -1920,7 +1780,7 @@ export function Timetable({ courses, onAddCourse, onDeleteCourse }: Props) {
                     const overrideName = overrideInfo?.name ?? null;
                     const overrideTime = overrideInfo?.time ?? null;
                     const bg = course?.color ?? null;
-                    const filled = !!(bg || overrideName);
+                    const filled = !!(course || bg || overrideName);
 
                     return (
                       <motion.td
