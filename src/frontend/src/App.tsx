@@ -30,6 +30,15 @@ import { SettingsView } from "./pages/SettingsView";
 import { TasksView } from "./pages/TasksView";
 import { Timetable } from "./pages/Timetable";
 import { TodayDashboard } from "./pages/TodayDashboard";
+import { runVersionCheck } from "./utils/storage";
+
+// Run version/cache check immediately on load (before any rendering)
+// Clears incompatible localStorage data that could cause crashes
+try {
+  runVersionCheck();
+} catch {
+  /* never crash on this */
+}
 
 const TAB_ORDER: TabId[] = [
   "today",
@@ -61,12 +70,16 @@ const BOTTOM_NAV_ITEMS = [
   { id: "settings" as TabId, label: "Settings", Icon: Settings2 },
 ];
 
-// ── Helpers to restore session from localStorage ──────────────────────────
+// ── Helpers to restore session from localStorage ────────────────────────
 function getStoredChoice(): "local" | "sync" | null {
-  return localStorage.getItem("instiflow_storage_choice") as
-    | "local"
-    | "sync"
-    | null;
+  try {
+    return localStorage.getItem("instiflow_storage_choice") as
+      | "local"
+      | "sync"
+      | null;
+  } catch {
+    return null;
+  }
 }
 
 function getStoredUid(): string | undefined {
@@ -74,14 +87,20 @@ function getStoredUid(): string | undefined {
     const raw = localStorage.getItem("instiflow_user");
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as { uid?: string };
-    return parsed.uid || undefined;
+    return parsed?.uid || undefined;
   } catch {
     return undefined;
   }
 }
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(() => {
+    try {
+      return window.innerWidth < 768;
+    } catch {
+      return false;
+    }
+  });
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
@@ -92,7 +111,7 @@ function useIsMobile() {
 }
 
 export default function App() {
-  // ── Restore session on refresh ─────────────────────────────────────────────
+  // ── Restore session on refresh ───────────────────────────────────────────
   // If user previously chose a storage mode, skip the landing/login flow.
   const choice = getStoredChoice();
 
@@ -118,28 +137,49 @@ export default function App() {
     if (getStoredChoice() !== "sync") return;
 
     let cancelled = false;
-    import("./lib/firebase").then(({ firebaseAuth }) => {
-      import("firebase/auth").then(({ onAuthStateChanged }) => {
-        const auth = firebaseAuth();
-        const unsub = onAuthStateChanged(auth, (user) => {
-          if (cancelled) return;
-          unsub();
-          if (user) {
-            // Firebase confirms user is still logged in
-            setUserId(user.uid);
-            setStorageMode("sync");
-            setShowLanding(false);
-            setShowLogin(false);
-          } else {
-            // Firebase says session expired — ask to re-login
-            localStorage.removeItem("instiflow_storage_choice");
-            localStorage.removeItem("instiflow_user");
-            setShowLanding(false);
-            setShowLogin(true);
-          }
+    import("./lib/firebase")
+      .then(({ firebaseAuth }) => {
+        import("firebase/auth").then(({ onAuthStateChanged }) => {
+          const auth = firebaseAuth();
+          const unsub = onAuthStateChanged(auth, (user) => {
+            if (cancelled) return;
+            unsub();
+            if (user) {
+              // Firebase confirms user is still logged in
+              setUserId(user.uid);
+              setStorageMode("sync");
+              setShowLanding(false);
+              setShowLogin(false);
+            } else {
+              // Firebase says session expired — ask to re-login
+              try {
+                localStorage.removeItem("instiflow_storage_choice");
+                localStorage.removeItem("instiflow_user");
+              } catch {
+                /* ignore */
+              }
+              setShowLanding(false);
+              setShowLogin(true);
+            }
+          });
         });
+      })
+      .catch((e) => {
+        // Firebase failed to load (network or missing package) — fall back to local
+        console.warn(
+          "[InstiFlow] Firebase auth check failed, falling back to local:",
+          e,
+        );
+        try {
+          localStorage.removeItem("instiflow_storage_choice");
+          localStorage.removeItem("instiflow_user");
+        } catch {
+          /* ignore */
+        }
+        setStorageMode("local");
+        setShowLanding(false);
+        setShowLogin(true);
       });
-    });
     return () => {
       cancelled = true;
     };
@@ -148,7 +188,7 @@ export default function App() {
   const data = useAppData({ userId, storageMode, migrateLocal });
   const theme = TAB_THEMES[activeTab];
 
-  // ── Slide animation direction tracking ────────────────────────────────────
+  // ── Slide animation direction tracking ────────────────────────────────
   const prevTabRef = useRef<TabId>("today");
   const [slideDir, setSlideDir] = useState(0);
 
@@ -217,74 +257,86 @@ export default function App() {
   };
 
   const renderContent = () => {
-    switch (activeTab) {
-      case "today":
-        return (
-          <TodayDashboard
-            courses={data.courses}
-            attendance={data.attendance}
-            tasks={data.tasks}
-            semSettings={data.semSettings}
-            studentName={data.studentName}
-            onTabChange={(t) => handleTabChange(t as TabId)}
-          />
-        );
-      case "timetable":
-        return (
-          <Timetable
-            courses={data.courses}
-            onAddCourse={data.addCourse}
-            onDeleteCourse={data.deleteCourse}
-          />
-        );
-      case "attendance":
-        return (
-          <AttendanceTracker
-            courses={data.courses}
-            attendance={data.attendance}
-            onAddAttendance={data.addAttendance}
-            onUpdateAttendance={data.updateAttendance}
-            onDeleteAttendance={data.deleteAttendance}
-          />
-        );
-      case "calendar":
-        return (
-          <CalendarView
-            courses={data.courses}
-            tasks={data.tasks}
-            semSettings={data.semSettings}
-          />
-        );
-      case "exams":
-        return (
-          <ExamsView
-            courses={data.courses}
-            semSettings={data.semSettings}
-            examEntries={data.examEntries}
-            onSetExamOverride={data.setExamOverride}
-            onClearExamOverride={data.clearExamOverride}
-          />
-        );
-      case "tasks":
-        return (
-          <TasksView
-            tasks={data.tasks}
-            onAddTask={data.addTask}
-            onDeleteTask={data.deleteTask}
-            onToggleTask={data.toggleTask}
-          />
-        );
-      case "settings":
-        return (
-          <SettingsView
-            semSettings={data.semSettings}
-            onUpdateSem={data.setSemSettings}
-            studentName={data.studentName}
-            onUpdateName={data.setStudentName}
-          />
-        );
-      default:
-        return null;
+    try {
+      switch (activeTab) {
+        case "today":
+          return (
+            <TodayDashboard
+              courses={data.courses}
+              attendance={data.attendance}
+              tasks={data.tasks}
+              semSettings={data.semSettings}
+              studentName={data.studentName}
+              onTabChange={(t) => handleTabChange(t as TabId)}
+            />
+          );
+        case "timetable":
+          return (
+            <Timetable
+              courses={data.courses}
+              onAddCourse={data.addCourse}
+              onDeleteCourse={data.deleteCourse}
+            />
+          );
+        case "attendance":
+          return (
+            <AttendanceTracker
+              courses={data.courses}
+              attendance={data.attendance}
+              onAddAttendance={data.addAttendance}
+              onUpdateAttendance={data.updateAttendance}
+              onDeleteAttendance={data.deleteAttendance}
+            />
+          );
+        case "calendar":
+          return (
+            <CalendarView
+              courses={data.courses}
+              tasks={data.tasks}
+              semSettings={data.semSettings}
+            />
+          );
+        case "exams":
+          return (
+            <ExamsView
+              courses={data.courses}
+              semSettings={data.semSettings}
+              examEntries={data.examEntries}
+              onSetExamOverride={data.setExamOverride}
+              onClearExamOverride={data.clearExamOverride}
+            />
+          );
+        case "tasks":
+          return (
+            <TasksView
+              tasks={data.tasks}
+              onAddTask={data.addTask}
+              onDeleteTask={data.deleteTask}
+              onToggleTask={data.toggleTask}
+            />
+          );
+        case "settings":
+          return (
+            <SettingsView
+              semSettings={data.semSettings}
+              onUpdateSem={data.setSemSettings}
+              studentName={data.studentName}
+              onUpdateName={data.setStudentName}
+            />
+          );
+        default:
+          return null;
+      }
+    } catch (e) {
+      console.error("[InstiFlow] Tab render error:", e);
+      return (
+        <div style={{ padding: 32, color: "#e2e8f0", textAlign: "center" }}>
+          <p style={{ fontSize: 16, opacity: 0.7 }}>
+            This section failed to load. Please try again or switch to another
+            tab.
+          </p>
+        </div>
+      );
     }
   };
 

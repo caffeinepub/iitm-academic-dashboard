@@ -1,4 +1,3 @@
-import Spline from "@splinetool/react-spline";
 import { motion, useScroll, useTransform } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -13,16 +12,15 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
   const [adminError, setAdminError] = useState("");
-  const [splineLoaded, setSplineLoaded] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll();
-  const splineOpacity = useTransform(scrollY, [0, 600], [1, 0.3]);
+  const bgOpacity = useTransform(scrollY, [0, 600], [1, 0.3]);
 
   const orb1Ref = useRef<HTMLDivElement>(null);
   const orb2Ref = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
-  // Canvas particle fallback — shown until Spline loads
+  // Canvas particle animation
   useEffect(() => {
     const el = canvasContainerRef.current;
     if (!el) return;
@@ -48,14 +46,14 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
       r: number;
       alpha: number;
     }[] = [];
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 120; i++) {
       particles.push({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        r: Math.random() * 2 + 0.5,
-        alpha: Math.random() * 0.5 + 0.1,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        r: Math.random() * 2.5 + 0.5,
+        alpha: Math.random() * 0.6 + 0.1,
       });
     }
 
@@ -73,6 +71,22 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(139,92,246,${p.alpha})`;
         ctx.fill();
+      }
+      // Draw subtle connecting lines
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 80) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(139,92,246,${0.08 * (1 - dist / 80)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
       }
       animId = requestAnimationFrame(draw);
     };
@@ -136,11 +150,10 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
       {/* Dark base */}
       <div className="landing-bg" />
 
-      {/* Canvas particle fallback — visible until Spline loads */}
+      {/* Canvas particle animation — full page */}
       <motion.div
-        animate={{ opacity: splineLoaded ? 0 : 1 }}
-        transition={{ duration: 1.5, ease: "easeInOut" }}
         style={{
+          opacity: bgOpacity,
           position: "fixed",
           inset: 0,
           zIndex: 0,
@@ -156,30 +169,6 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
             display: "block",
           }}
         />
-      </motion.div>
-
-      {/* Spline 3D — full page, fades in on load */}
-      <motion.div
-        style={{
-          opacity: splineOpacity,
-          position: "fixed",
-          inset: 0,
-          zIndex: 1,
-          overflow: "hidden",
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: splineLoaded ? 1 : 0 }}
-          transition={{ duration: 1.4, ease: "easeInOut" }}
-          style={{ width: "100%", height: "100%" }}
-        >
-          <Spline
-            scene="https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode"
-            onLoad={() => setSplineLoaded(true)}
-            style={{ width: "100%", height: "100%" }}
-          />
-        </motion.div>
       </motion.div>
 
       <div ref={orb1Ref} className="landing-orb landing-orb-1" />
