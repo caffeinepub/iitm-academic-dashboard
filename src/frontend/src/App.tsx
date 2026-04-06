@@ -263,6 +263,7 @@ export default function App() {
           return (
             <TodayDashboard
               courses={data.courses}
+              timetableEntries={data.timetableEntries}
               attendance={data.attendance}
               tasks={data.tasks}
               semSettings={data.semSettings}
@@ -276,6 +277,10 @@ export default function App() {
               courses={data.courses}
               onAddCourse={data.addCourse}
               onDeleteCourse={data.deleteCourse}
+              timetableEntries={data.timetableEntries}
+              onAddTimetableEntries={data.addTimetableEntries}
+              onDeleteTimetableEntry={data.deleteTimetableEntry}
+              onDeleteEntriesForCourse={data.deleteEntriesForCourse}
             />
           );
         case "attendance":
@@ -393,6 +398,7 @@ export default function App() {
             <TabThemeContext.Provider value={theme}>
               <NotificationManager
                 courses={data.courses}
+                timetableEntries={data.timetableEntries}
                 attendance={data.attendance}
                 tasks={data.tasks}
                 examEntries={data.examEntries}

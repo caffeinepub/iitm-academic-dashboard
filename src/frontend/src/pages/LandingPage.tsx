@@ -19,11 +19,33 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
   const orb1Ref = useRef<HTMLDivElement>(null);
   const orb2Ref = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [splineLoaded, setSplineLoaded] = useState(false);
 
-  // Canvas particle animation
+  // Load Spline viewer script dynamically
+  useEffect(() => {
+    // Check if already loaded
+    if (customElements.get("spline-viewer")) {
+      setSplineLoaded(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src =
+      "https://unpkg.com/@splinetool/viewer@1.12.73/build/spline-viewer.js";
+    script.onload = () => setSplineLoaded(true);
+    document.head.appendChild(script);
+    return () => {
+      try {
+        document.head.removeChild(script);
+      } catch {}
+    };
+  }, []);
+
+  // Fallback canvas particles (shown while Spline loads or if unavailable)
   useEffect(() => {
     const el = canvasContainerRef.current;
     if (!el) return;
+    if (splineLoaded) return; // Spline is active, skip canvas
     const canvas = document.createElement("canvas");
     canvas.style.width = "100%";
     canvas.style.height = "100%";
@@ -97,7 +119,7 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
       window.removeEventListener("resize", resize);
       if (el.contains(canvas)) el.removeChild(canvas);
     };
-  }, []);
+  }, [splineLoaded]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -118,7 +140,11 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
     }
   }, []);
 
-  const stagger = (i: number) => ({ delay: 0.05 + i * 0.08 });
+  const stagger = (i: number) => ({
+    delay: Math.max(0, 0.02 + i * 0.05) as number,
+    duration: 0.35,
+    ease: "easeOut" as const,
+  });
 
   const handleAdminLogin = () => {
     if (adminUser === "BE24B034" && adminPass === "bobbe@2006") {
@@ -161,14 +187,41 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
           overflow: "hidden",
         }}
       >
-        <div
-          ref={canvasContainerRef}
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "block",
-          }}
-        />
+        {splineLoaded ? (
+          <>
+            {/* Watermark blocker — covers the Spline "Made with Spline" badge */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 200,
+                height: 50,
+                background: "#060810",
+                zIndex: 10,
+                pointerEvents: "none",
+              }}
+            />
+            {/* @ts-ignore */}
+            <spline-viewer
+              url="https://prod.spline.design/atbUfD8ybgiIefp4/scene.splinecode"
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "block",
+              }}
+            />
+          </>
+        ) : (
+          <div
+            ref={canvasContainerRef}
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "block",
+            }}
+          />
+        )}
       </motion.div>
 
       <div ref={orb1Ref} className="landing-orb landing-orb-1" />
@@ -341,7 +394,7 @@ export function LandingPage({ onEnter, onAdmin }: LandingPageProps) {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.7 }}
+            transition={{ delay: 0.25 }}
             className="landing-stats"
           >
             {[

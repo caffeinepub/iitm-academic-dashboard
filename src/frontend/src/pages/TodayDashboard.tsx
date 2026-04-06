@@ -3,10 +3,17 @@ import { GlassCard } from "../components/GlassCard";
 import { ProgressBar } from "../components/ProgressBar";
 import { useTabTheme } from "../contexts/TabTheme";
 import { useCountUp } from "../hooks/useCountUp";
-import type { AttendanceRecord, Course, SemSettings, Task } from "../types";
+import type {
+  AttendanceRecord,
+  Course,
+  SemSettings,
+  Task,
+  TimetableEntry,
+} from "../types";
 import { calcAttendance } from "../utils/attendance";
 import { getHolidaysForSem, isHoliday } from "../utils/holidays";
 import { getSemCalendar, isExamPeriod } from "../utils/semester";
+import { getClassesOnDayFromEntries } from "../utils/slots";
 import { getClassesOnDay } from "../utils/slots";
 
 function StatCard({
@@ -46,6 +53,7 @@ function StatCard({
 
 interface Props {
   courses: Course[];
+  timetableEntries?: TimetableEntry[];
   attendance: AttendanceRecord[];
   tasks: Task[];
   semSettings: SemSettings;
@@ -55,6 +63,7 @@ interface Props {
 
 export function TodayDashboard({
   courses,
+  timetableEntries = [],
   attendance,
   tasks,
   semSettings,
@@ -74,7 +83,17 @@ export function TodayDashboard({
   const todayHoliday = isHoliday(todayStr, holidays);
   const examPeriod = isExamPeriod(todayStr, cal);
 
-  const todaysClasses = todayHoliday ? [] : getClassesOnDay(dayOfWeek, courses);
+  const todaysClasses = todayHoliday
+    ? []
+    : timetableEntries.length > 0
+      ? getClassesOnDayFromEntries(dayOfWeek, timetableEntries)
+      : getClassesOnDay(dayOfWeek, courses);
+
+  // Unique course count from entries (includes EXTRA_6_8), fallback to courses.length
+  const uniqueCourseCount =
+    timetableEntries.length > 0
+      ? new Set(timetableEntries.map((e) => e.courseId)).size
+      : courses.length;
 
   const upcomingTasks = tasks
     .filter((t) => !t.completed && t.date >= todayStr)
@@ -175,7 +194,7 @@ export function TodayDashboard({
         {[
           {
             label: "Courses",
-            value: courses.length,
+            value: uniqueCourseCount,
             icon: "📚",
             color: "#a78bfa",
           },

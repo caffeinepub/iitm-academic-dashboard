@@ -1,5 +1,5 @@
-// ── App version — bump this if localStorage schema changes ─────────────────
-const APP_VERSION = "64";
+// ── App version — bump this if localStorage schema changes ───────────────────────
+const APP_VERSION = "69";
 const VERSION_KEY = "instiflow_app_version";
 
 /**
