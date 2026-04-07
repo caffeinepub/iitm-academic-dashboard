@@ -276,7 +276,7 @@ export function Timetable({
     if (found) {
       setName(found.name);
       setVenue(found.venue);
-      setPopulateMsg(`\u2713 Populated from database: ${key}`);
+      setPopulateMsg(`✓ Populated from database: ${key}`);
     } else {
       setPopulateMsg(`Course "${key}" not found in database.`);
     }
@@ -497,14 +497,14 @@ export function Timetable({
                       }}
                     >
                       {entry.courseName.length > 10
-                        ? `${entry.courseName.slice(0, 9)}\u2026`
+                        ? `${entry.courseName.slice(0, 9)}…`
                         : entry.courseName}
                     </span>
                     <span
                       className="print-hide"
                       style={{ fontSize: 6, color: "rgba(0,0,0,0.35)" }}
                     >
-                      \u00d7 rm
+                      × rm
                     </span>
                   </button>
                 ))}
@@ -541,7 +541,7 @@ export function Timetable({
                     }}
                   >
                     {firstEntry.courseName.length > 14
-                      ? `${firstEntry.courseName.slice(0, 13)}\u2026`
+                      ? `${firstEntry.courseName.slice(0, 13)}…`
                       : firstEntry.courseName}
                   </span>
                 )}
@@ -570,7 +570,7 @@ export function Timetable({
                       display: "block",
                     }}
                   >
-                    \u23f0 {overrideTime}
+                    ⏰ {overrideTime}
                   </span>
                 )}
                 <span
@@ -607,7 +607,7 @@ export function Timetable({
                       display: "block",
                     }}
                   >
-                    \u23f0 {overrideTime}
+                    ⏰ {overrideTime}
                   </span>
                 )}
                 <span
@@ -666,7 +666,7 @@ export function Timetable({
             onClick={() => window.print()}
             style={{ fontSize: 13, padding: "8px 16px" }}
           >
-            \ud83d\udda8\ufe0f Print
+            🖨️ Print
           </motion.button>
           <motion.button
             data-ocid="timetable.primary_button"
@@ -675,7 +675,7 @@ export function Timetable({
             onClick={() => setShowForm(!showForm)}
             style={{ fontSize: 13, padding: "8px 18px" }}
           >
-            {showForm ? "\u2715 Cancel" : "+ Add Course"}
+            {showForm ? "✕ Cancel" : "+ Add Course"}
           </motion.button>
         </div>
       </div>
@@ -724,7 +724,7 @@ export function Timetable({
                   : "rotate(0deg)",
               }}
             >
-              \u25be
+              ▼
             </span>
           </button>
 
@@ -780,7 +780,7 @@ export function Timetable({
                           <span style={{ color: "#818cf8", fontWeight: 700 }}>
                             {ov.slot}
                           </span>
-                          <span style={{ color: "#6B7590" }}>\u2192</span>
+                          <span style={{ color: "#6B7590" }}>→</span>
                           <span style={{ color: "#F0F4FF", flex: 1 }}>
                             {ov.name || (
                               <em style={{ color: "#4A5270" }}>deleted</em>
@@ -803,7 +803,7 @@ export function Timetable({
                               opacity: 0.7,
                             }}
                           >
-                            \u00d7
+                            ×
                           </motion.button>
                         </div>
                       ))}
@@ -862,7 +862,7 @@ export function Timetable({
                           <input
                             className="glass-input"
                             style={{ flex: "1 1 140px", fontSize: 12 }}
-                            placeholder="Time e.g. 10:00\u201311:00"
+                            placeholder="Time e.g. 10:00–11:00"
                             value={ovTime}
                             onChange={(e) => setOvTime(e.target.value)}
                           />
@@ -886,7 +886,7 @@ export function Timetable({
                       style={{ fontSize: 12, padding: "8px 16px" }}
                       onClick={() => setShowOverrideForm(!showOverrideForm)}
                     >
-                      {showOverrideForm ? "\u2715 Cancel" : "+ Add Override"}
+                      {showOverrideForm ? "✕ Cancel" : "+ Add Override"}
                     </motion.button>
                     <motion.button
                       whileTap={{ scale: 0.97 }}
@@ -950,7 +950,7 @@ export function Timetable({
                 transform: showSaveLoad ? "rotate(180deg)" : "rotate(0deg)",
               }}
             >
-              \u25be
+              ▼
             </span>
           </button>
           <AnimatePresence initial={false}>
@@ -971,8 +971,8 @@ export function Timetable({
                       marginBottom: 16,
                     }}
                   >
-                    \u26a0\ufe0f Warning: Making modifications to the downloaded
-                    file might lead to unpredictable results!
+                    ⚠️ Warning: Making modifications to the downloaded file might
+                    lead to unpredictable results!
                   </p>
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                     <motion.button
@@ -989,7 +989,7 @@ export function Timetable({
                       }}
                       onClick={handleSaveData}
                     >
-                      \ud83d\udcbe Save Data
+                      💾 Save Data
                     </motion.button>
                     <motion.button
                       data-ocid="timetable.load.secondary_button"
@@ -1005,7 +1005,7 @@ export function Timetable({
                       }}
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      \ud83d\udcc2 Load Data
+                      📂 Load Data
                     </motion.button>
                     <input
                       ref={fileInputRef}
@@ -1069,7 +1069,7 @@ export function Timetable({
                 transform: showForm ? "rotate(180deg)" : "rotate(0deg)",
               }}
             >
-              \u25be
+              ▼
             </span>
           </button>
 
@@ -1138,7 +1138,7 @@ export function Timetable({
                         onClick={handlePopulate}
                         title="Auto-fill name & venue from IITM course database"
                       >
-                        \u2728 Populate
+                        ✨ Populate
                       </motion.button>
                     </div>
                     <input
@@ -1158,8 +1158,8 @@ export function Timetable({
                       {ALL_SLOTS.map((s) => (
                         <option key={s} value={s}>
                           {s === "EXTRA_6_8"
-                            ? "Extra Slot \u2014 18:00\u201320:00 (all days)"
-                            : `Slot ${s} \u2014 ${getSlotScheduleDesc(s)}`}
+                            ? "Extra Slot — 18:00–20:00 (all days)"
+                            : `Slot ${s} — ${getSlotScheduleDesc(s)}`}
                         </option>
                       ))}
                     </select>
@@ -1181,16 +1181,16 @@ export function Timetable({
                     <div
                       style={{
                         fontSize: 11,
-                        color: populateMsg.startsWith("\u2713")
+                        color: populateMsg.startsWith("✓")
                           ? "#22d3ee"
                           : "rgba(255,122,89,0.85)",
                         marginBottom: 10,
                         padding: "4px 8px",
                         borderRadius: 6,
-                        background: populateMsg.startsWith("\u2713")
+                        background: populateMsg.startsWith("✓")
                           ? "rgba(34,211,238,0.06)"
                           : "rgba(255,122,89,0.06)",
-                        border: `1px solid ${populateMsg.startsWith("\u2713") ? "rgba(34,211,238,0.2)" : "rgba(255,122,89,0.2)"}`,
+                        border: `1px solid ${populateMsg.startsWith("✓") ? "rgba(34,211,238,0.2)" : "rgba(255,122,89,0.2)"}`,
                       }}
                     >
                       {populateMsg}
@@ -1313,14 +1313,14 @@ export function Timetable({
                         onChange={(e) => setRemoveCourseId(e.target.value)}
                       >
                         <option value="">
-                          \u2014 Select course to remove (all instances) \u2014
+                          — Select course to remove (all instances) —
                         </option>
                         {courses.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.slot === "EXTRA_6_8"
                               ? "Extra Slot"
                               : `Slot ${c.slot}`}{" "}
-                            \u00b7 {c.name}
+                            · {c.name}
                             {c.code ? ` (${c.code})` : ""}
                           </option>
                         ))}
@@ -1364,7 +1364,7 @@ export function Timetable({
                       onClick={() => {
                         if (
                           window.confirm(
-                            "\u26a0\ufe0f Clear ALL courses from timetable? This cannot be undone.",
+                            "⚠️ Clear ALL courses from timetable? This cannot be undone.",
                           )
                         ) {
                           for (const c of courses) {
@@ -1379,7 +1379,7 @@ export function Timetable({
                         fontSize: 12,
                       }}
                     >
-                      \u26a0\ufe0f Clear All
+                      ⚠️ Clear All
                     </motion.button>
                     <motion.button
                       className="glass-btn"
@@ -1387,7 +1387,7 @@ export function Timetable({
                       onClick={handlePopulate}
                       style={{ padding: "9px 18px", fontSize: 12 }}
                     >
-                      \u2728 Populate
+                      ✨ Populate
                     </motion.button>
                   </div>
                 </div>
@@ -1419,10 +1419,10 @@ export function Timetable({
         >
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#c4b5fd" }}>
-              \u23f0 Extra Slot (6 PM \u2013 8 PM)
+              ⏰ Extra Slot (6 PM – 8 PM)
             </div>
             <div style={{ fontSize: 11, color: "#6B7590", marginTop: 2 }}>
-              Add 6\u20138 PM classes to your timetable grid
+              Add 6–8 PM classes to your timetable grid
             </div>
           </div>
           <span
@@ -1433,7 +1433,7 @@ export function Timetable({
               transition: "transform 0.2s",
             }}
           >
-            \u25be
+            ▼
           </span>
         </button>
 
@@ -1469,8 +1469,8 @@ export function Timetable({
                     {es.courseName} {es.courseCode ? `(${es.courseCode})` : ""}
                   </div>
                   <div style={{ fontSize: 11, color: "#8A94B0" }}>
-                    {es.startTime}\u2013{es.endTime} \u00b7{" "}
-                    {es.venue ? `\u00b7 ${es.venue}` : ""} &middot; Days:{" "}
+                    {es.startTime}–{es.endTime} ·{" "}
+                    {es.venue ? `· ${es.venue}` : ""} &middot; Days:{" "}
                     {extraSlotEntries
                       .filter((e) => e.courseId === es.courseId)
                       .map((e) => DAY_SHORTS[e.day])
@@ -1490,7 +1490,7 @@ export function Timetable({
                     onDeleteEntriesForCourse(es.courseId);
                   }}
                 >
-                  \u00d7
+                  ×
                 </motion.button>
               </div>
             ))}
@@ -1684,10 +1684,10 @@ export function Timetable({
               marginBottom: 2,
             }}
           >
-            InstiFlow \u2014 IITM Weekly Timetable
+            InstiFlow — IITM Weekly Timetable
           </div>
           <div style={{ fontSize: 11, color: "#555" }}>
-            Jan\u2013May 2026 \u00b7 Even Semester
+            Jan–May 2026 · Even Semester
           </div>
         </div>
 
@@ -1774,7 +1774,7 @@ export function Timetable({
                     lineHeight: 1.4,
                   }}
                 >
-                  \u23f0 18:00\u201320:00
+                  ⏰ 18:00–20:00
                 </th>
               </tr>
             </thead>
@@ -1825,7 +1825,7 @@ export function Timetable({
                                 gap: 3,
                               }}
                             >
-                              <span style={{ fontSize: 14 }}>\ud83c\udf5c</span>
+                              <span style={{ fontSize: 14 }}>🍜</span>
                               <span
                                 style={{
                                   fontSize: 9,
@@ -2031,7 +2031,7 @@ export function Timetable({
                                         }}
                                       >
                                         {entries[0].courseName.length > 10
-                                          ? `${entries[0].courseName.slice(0, 9)}\u2026`
+                                          ? `${entries[0].courseName.slice(0, 9)}…`
                                           : entries[0].courseName}
                                       </span>
                                     )}
@@ -2084,7 +2084,7 @@ export function Timetable({
                                           lineHeight: 1,
                                         }}
                                       >
-                                        \u23f0 {overrideInfo.time}
+                                        ⏰ {overrideInfo.time}
                                       </span>
                                     )}
                                     <span
@@ -2275,7 +2275,7 @@ export function Timetable({
                                   }}
                                 >
                                   {entry.courseName.length > 12
-                                    ? `${entry.courseName.slice(0, 11)}\u2026`
+                                    ? `${entry.courseName.slice(0, 11)}…`
                                     : entry.courseName}
                                 </span>
                                 {entry.venue && (
@@ -2295,7 +2295,7 @@ export function Timetable({
                                     color: "rgba(167,139,250,0.6)",
                                   }}
                                 >
-                                  {entry.startTime}\u2013{entry.endTime}
+                                  {entry.startTime}–{entry.endTime}
                                 </span>
                                 <span
                                   className="print-hide"
@@ -2358,11 +2358,11 @@ export function Timetable({
                   <span style={{ fontWeight: 700, color: "#B0BAD0" }}>
                     {c.slot === "EXTRA_6_8" ? "Extra" : `Slot ${c.slot}`}
                   </span>
-                  <span style={{ color: "#4A5270" }}>\u2014</span>
+                  <span style={{ color: "#4A5270" }}>—</span>
                   <span style={{ color: "#8B95B0" }}>{c.code || c.name}</span>
                   {c.venue && (
                     <span style={{ color: "#4A5270", fontSize: 10 }}>
-                      \u00b7 {c.venue}
+                      · {c.venue}
                     </span>
                   )}
                 </div>
@@ -2462,18 +2462,18 @@ export function Timetable({
                     }}
                   >
                     {c.slot === "EXTRA_6_8"
-                      ? "Extra Slot (18:00\u201320:00)"
+                      ? "Extra Slot (18:00–20:00)"
                       : `Slot ${c.slot}`}
                     {c.venue && (
                       <span style={{ color: "#6B7590", fontWeight: 400 }}>
                         {" "}
-                        \u00b7 {c.venue}
+                        · {c.venue}
                       </span>
                     )}
                     {c.hoursPerWeek && (
                       <span style={{ fontSize: 10, color: "#4A5270" }}>
                         {" "}
-                        \u00b7 {c.hoursPerWeek} hrs/wk
+                        · {c.hoursPerWeek} hrs/wk
                       </span>
                     )}
                   </div>
@@ -2497,7 +2497,7 @@ export function Timetable({
                     opacity: 0.7,
                   }}
                 >
-                  \u00d7
+                  ×
                 </motion.button>
               </motion.div>
             ))}
@@ -2540,9 +2540,7 @@ export function Timetable({
                 textAlign: "center",
               }}
             >
-              <div style={{ fontSize: 24, marginBottom: 12 }}>
-                \ud83d\uddd1\ufe0f
-              </div>
+              <div style={{ fontSize: 24, marginBottom: 12 }}>🗑️</div>
               <div
                 style={{
                   fontSize: 15,

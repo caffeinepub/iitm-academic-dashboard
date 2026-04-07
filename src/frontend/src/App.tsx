@@ -327,6 +327,48 @@ export default function App() {
               onUpdateSem={data.setSemSettings}
               studentName={data.studentName}
               onUpdateName={data.setStudentName}
+              storageMode={storageMode}
+              onSignOut={async () => {
+                // Save to Firestore before signing out
+                if (userId && storageMode === "sync") {
+                  try {
+                    const { saveToFirestore } = await import(
+                      "./utils/firestoreSync"
+                    );
+                    await saveToFirestore(userId, {
+                      courses: data.courses,
+                      timetableEntries: data.timetableEntries,
+                      attendance: data.attendance,
+                      tasks: data.tasks,
+                      semSettings: data.semSettings,
+                      studentName: data.studentName,
+                      examEntries: data.examEntries,
+                    });
+                  } catch {
+                    /* ignore save errors on sign out */
+                  }
+                }
+                // Sign out from Firebase
+                try {
+                  const { firebaseAuth } = await import("./lib/firebase");
+                  const { signOut } = await import("firebase/auth");
+                  await signOut(firebaseAuth());
+                } catch {
+                  /* ignore */
+                }
+                // Clear auth state from localStorage
+                try {
+                  localStorage.removeItem("instiflow_user");
+                  localStorage.removeItem("instiflow_storage_choice");
+                } catch {
+                  /* ignore */
+                }
+                // Return to landing page
+                setUserId(undefined);
+                setStorageMode("local");
+                setShowLanding(true);
+                setShowLogin(false);
+              }}
             />
           );
         default:

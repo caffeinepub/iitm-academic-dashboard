@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { getFCMToken, setupForegroundNotifications } from "../lib/fcm";
 import type {
   AttendanceRecord,
   Course,
@@ -9,6 +10,7 @@ import type {
   TimetableEntry,
 } from "../types";
 import { calcAttendance } from "../utils/attendance";
+import { cleanText } from "../utils/cleanText";
 import {
   DEFAULT_NOTIF_PREFS,
   type NotifPrefs,
@@ -113,7 +115,7 @@ function buildSchedule(
 
     notifications.push({
       tag: `daily-summary-${summaryDateStr}`,
-      title: "InstiFlow \u2014 Good Morning \ud83d\udcda",
+      title: "InstiFlow — Good Morning 📚",
       body: summaryBody.trim() || "Have a great day!",
       scheduledAt: toISO(dailySummaryDate),
     });
@@ -123,16 +125,16 @@ function buildSchedule(
   if (prefs.examRemindersEnabled) {
     let offsets: Array<{ days: number; label: string }> = [];
     if (prefs.examReminderTiming === "1d")
-      offsets = [{ days: 1, label: "Exam Tomorrow \ud83d\udd34" }];
+      offsets = [{ days: 1, label: "Exam Tomorrow 🔴" }];
     else if (prefs.examReminderTiming === "3d")
-      offsets = [{ days: 3, label: "Exam in 3 Days \u26a0\ufe0f" }];
+      offsets = [{ days: 3, label: "Exam in 3 Days ⚠️" }];
     else if (prefs.examReminderTiming === "7d")
-      offsets = [{ days: 7, label: "Exam in 1 Week \u23f0" }];
+      offsets = [{ days: 7, label: "Exam in 1 Week ⏰" }];
     else
       offsets = [
-        { days: 7, label: "Exam in 1 Week \u23f0" },
-        { days: 3, label: "Exam in 3 Days \u26a0\ufe0f" },
-        { days: 1, label: "Exam Tomorrow \ud83d\udd34" },
+        { days: 7, label: "Exam in 1 Week ⏰" },
+        { days: 3, label: "Exam in 3 Days ⚠️" },
+        { days: 1, label: "Exam Tomorrow 🔴" },
       ];
 
     for (const ex of examEntries) {
@@ -157,7 +159,7 @@ function buildSchedule(
         if (alertTime > now) {
           notifications.push({
             tag: `exam-${ex.id}-${days}d`,
-            title: `InstiFlow \u2014 ${label}`,
+            title: `InstiFlow — ${label}`,
             body,
             scheduledAt: toISO(alertTime),
           });
@@ -182,7 +184,7 @@ function buildSchedule(
         if (twoDaysBefore > now) {
           notifications.push({
             tag: `task-2d-${t.id}`,
-            title: "InstiFlow \u2014 Task Due in 2 Days \ud83d\udccb",
+            title: "InstiFlow — Task Due in 2 Days 📋",
             body: t.title,
             scheduledAt: toISO(twoDaysBefore),
           });
@@ -199,7 +201,7 @@ function buildSchedule(
         if (dayBefore > now) {
           notifications.push({
             tag: `task-before-${t.id}`,
-            title: "InstiFlow \u2014 Task Due Tomorrow \ud83d\udccb",
+            title: "InstiFlow — Task Due Tomorrow 📋",
             body: t.title,
             scheduledAt: toISO(dayBefore),
           });
@@ -211,7 +213,7 @@ function buildSchedule(
       if (dueDayAlert > now) {
         notifications.push({
           tag: `task-due-${t.id}`,
-          title: "InstiFlow \u2014 Task Due Today \ud83d\udd14",
+          title: "InstiFlow — Task Due Today 🔔",
           body: t.title,
           scheduledAt: toISO(dueDayAlert),
         });
@@ -257,7 +259,10 @@ export function NotificationManager({
 
   const showForeground = (title: string, body: string) => {
     const id = `${Date.now()}-${Math.random()}`;
-    setForegroundNotifs((prev) => [...prev, { id, title, body }]);
+    setForegroundNotifs((prev) => [
+      ...prev,
+      { id, title: cleanText(title), body: cleanText(body) },
+    ]);
     setTimeout(
       () => setForegroundNotifs((prev) => prev.filter((n) => n.id !== id)),
       6000,
@@ -265,33 +270,62 @@ export function NotificationManager({
   };
 
   const showNotification = (title: string, body: string) => {
+    const cleanTitle = cleanText(title);
+    const cleanBody = cleanText(body);
     if (
       typeof Notification !== "undefined" &&
       Notification.permission === "granted"
     ) {
-      new Notification(title, { body, icon: "/icons/icon-192.png" });
+      new Notification(cleanTitle, {
+        body: cleanBody,
+        icon: "/icons/icon-192.png",
+      });
     }
-    showForeground(title, body);
+    showForeground(cleanTitle, cleanBody);
   };
 
   // Expose showNotification globally for test button
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional stable ref
   useEffect(() => {
-    (window as any).__instiflowNotify = showNotification;
+    (window as unknown as Record<string, unknown>).__instiflowNotify =
+      showNotification;
     return () => {
-      (window as any).__instiflowNotify = undefined;
+      (window as unknown as Record<string, unknown>).__instiflowNotify =
+        undefined;
     };
   }, []);
 
-  // Permission request + iOS banner
+  // Permission request + FCM token + iOS banner
   useEffect(() => {
     if (typeof Notification === "undefined") return;
     if (Notification.permission === "default") {
-      Notification.requestPermission().then((p) => setPermission(p));
+      Notification.requestPermission().then((p) => {
+        setPermission(p);
+        // After permission granted, try to get FCM token
+        if (p === "granted") {
+          getFCMToken().catch((e) =>
+            console.warn("[FCM] Token fetch failed:", e),
+          );
+        }
+      });
+    } else if (Notification.permission === "granted") {
+      // Already granted — try to get/refresh FCM token
+      getFCMToken().catch((e) => console.warn("[FCM] Token fetch failed:", e));
     }
     if (isIOS && !isStandalone && Notification.permission !== "granted") {
       setShowIOSBanner(true);
     }
+  }, []);
+
+  // Set up FCM foreground message listener
+  // biome-ignore lint/correctness/useExhaustiveDependencies: showForeground is stable
+  useEffect(() => {
+    const unsubscribe = setupForegroundNotifications((payload) => {
+      const title = payload.notification?.title ?? "InstiFlow";
+      const body = payload.notification?.body ?? "";
+      showForeground(title, body);
+    });
+    return unsubscribe;
   }, []);
 
   // Push schedule to SW
@@ -377,9 +411,9 @@ export function NotificationManager({
         const timer = setTimeout(() => {
           if (Notification.permission !== "granted") return;
           new Notification(
-            `InstiFlow \u2014 Class in ${reminderMinutes} Minutes \ud83d\udd14`,
+            `InstiFlow — Class in ${reminderMinutes} Minutes 🔔`,
             {
-              body: `${item.name} (Slot ${item.slot}) at ${item.startTime}${item.venue ? ` \u00b7 ${item.venue}` : ""}`,
+              body: `${item.name} (Slot ${item.slot}) at ${item.startTime}${item.venue ? ` · ${item.venue}` : ""}`,
               icon: "/icons/icon-192.png",
               tag,
             },
@@ -430,13 +464,15 @@ export function NotificationManager({
               : [];
 
         for (const item of items) {
-          const name = (item as any).courseName ?? (item as any).name;
-          const slot = (item as any).slot;
-          const key = `class-${today}-${(item as any).courseId ?? (item as any).id}`;
+          const name =
+            (item as unknown as Record<string, unknown>).courseName ??
+            (item as unknown as Record<string, unknown>).name;
+          const slot = (item as unknown as Record<string, unknown>).slot;
+          const key = `class-${today}-${(item as unknown as Record<string, unknown>).courseId ?? (item as unknown as Record<string, unknown>).id}`;
           if (!firedRef.current.has(key)) {
             firedRef.current.add(key);
             showNotification(
-              "InstiFlow \u2014 Class Today \ud83d\udcda",
+              "InstiFlow — Class Today 📚",
               `${name} (Slot ${slot})`,
             );
           }
@@ -449,7 +485,7 @@ export function NotificationManager({
             if (!firedRef.current.has(key)) {
               firedRef.current.add(key);
               showNotification(
-                "InstiFlow \u2014 Attendance Warning \u26a0\ufe0f",
+                "InstiFlow — Attendance Warning ⚠️",
                 `${c.name}: ${stats.percentage}% (need ${stats.toReach75} more classes)`,
               );
             }
@@ -468,10 +504,7 @@ export function NotificationManager({
             if (!firedRef.current.has(key)) {
               firedRef.current.add(key);
               const label = t.date === today ? "Due Today" : "Due Tomorrow";
-              showNotification(
-                `InstiFlow \u2014 Task ${label} \ud83d\udccb`,
-                t.title,
-              );
+              showNotification(`InstiFlow — Task ${label} 📋`, t.title);
             }
           }
         }
@@ -523,9 +556,7 @@ export function NotificationManager({
               <div
                 style={{ display: "flex", alignItems: "flex-start", gap: 10 }}
               >
-                <span style={{ fontSize: 18, lineHeight: 1.2 }}>
-                  \ud83d\udd14
-                </span>
+                <span style={{ fontSize: 18, lineHeight: 1.2 }}>🔔</span>
                 <div style={{ flex: 1 }}>
                   <p
                     style={{
@@ -606,9 +637,7 @@ export function NotificationManager({
               <div
                 style={{ display: "flex", alignItems: "flex-start", gap: 10 }}
               >
-                <span style={{ fontSize: 22, lineHeight: 1.2 }}>
-                  \ud83d\udcf1
-                </span>
+                <span style={{ fontSize: 22, lineHeight: 1.2 }}>📱</span>
                 <div style={{ flex: 1 }}>
                   <p
                     style={{
@@ -638,7 +667,7 @@ export function NotificationManager({
                         fontWeight: 700,
                       }}
                     >
-                      Share \u2b06
+                      Share ⬆
                     </span>{" "}
                     then{" "}
                     <span
@@ -675,7 +704,7 @@ export function NotificationManager({
                     transition: "background 0.2s",
                   }}
                 >
-                  \u00d7
+                  ×
                 </button>
               </div>
             </div>

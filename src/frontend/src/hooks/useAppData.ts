@@ -82,16 +82,14 @@ export function useAppData({
         if (cloudData) {
           suppressSaveUntil.current = Date.now() + 5000;
           setCourses(cloudData.courses ?? []);
-          setTimetableEntries((cloudData as any).timetableEntries ?? []);
+          setTimetableEntries(cloudData.timetableEntries ?? []);
           setAttendance(cloudData.attendance ?? []);
           setTasks(cloudData.tasks ?? []);
           if (cloudData.semSettings) setSemSettings(cloudData.semSettings);
           if (cloudData.studentName) setStudentName(cloudData.studentName);
           setExamEntries(cloudData.examEntries ?? []);
         } else if (migrateLocal) {
-          const localData: FirestoreData & {
-            timetableEntries: TimetableEntry[];
-          } = {
+          const localData: FirestoreData = {
             courses: getItem<Course[]>("courses", []),
             timetableEntries: getItem<TimetableEntry[]>("timetableEntries", []),
             attendance: getItem<AttendanceRecord[]>("attendance", []),
@@ -131,7 +129,7 @@ export function useAppData({
           receivingSnapshot.current = true;
           suppressSaveUntil.current = Date.now() + 3000;
           setCourses(data.courses ?? []);
-          setTimetableEntries((data as any).timetableEntries ?? []);
+          setTimetableEntries(data.timetableEntries ?? []);
           setAttendance(data.attendance ?? []);
           setTasks(data.tasks ?? []);
           if (data.semSettings) setSemSettings(data.semSettings);
@@ -194,7 +192,7 @@ export function useAppData({
         semSettings,
         studentName,
         examEntries,
-      } as any).catch((e) => console.warn("Firestore save failed:", e));
+      }).catch((e) => console.warn("Firestore save failed:", e));
     }, 500);
 
     return () => {
