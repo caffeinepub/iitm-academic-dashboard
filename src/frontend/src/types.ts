@@ -16,7 +16,8 @@ export interface TimetableEntry {
   courseId: string; // links back to Course for attendance/exams
   courseName: string;
   courseCode: string;
-  slot: string; // e.g. "A", "EXTRA_6_8"
+  slot: string; // e.g. "A", "EXTRA_6_8", "PQRST", "LUNCH"
+  slotGroup?: "PQRST"; // set when slot is P/Q/R/S/T — treated as one merged block
   day: number; // 0=Mon … 4=Fri
   colIndex: number; // TIME_COLUMNS index (or 9 for extra slot)
   startTime: string;

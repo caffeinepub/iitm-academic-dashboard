@@ -27,8 +27,41 @@ export const EXTRA_SLOT_TIME: TimeColumn = {
   end: "20:00",
 };
 
+// Lunch slot
+export const LUNCH_COL_INDEX = 4;
+export const LUNCH_SLOT_TIME: TimeColumn = {
+  label: "12:00–13:00",
+  start: "12:00",
+  end: "13:00",
+};
+
+// ─── PQRST Slot Group ────────────────────────────────────────────────────────────────────────
+// P, Q, R, S, T are lab slots that span 14:00–16:45.
+// When any of these slots is selected, it is treated as ONE merged block (slotGroup: "PQRST")
+// spanning both lab columns (col 6 and col 7) of the day row.
+export const PQRST_SLOTS = ["P", "Q", "R", "S", "T"] as const;
+export type PQRSTSlot = (typeof PQRST_SLOTS)[number];
+
+export const PQRST_START_TIME = "14:00";
+export const PQRST_END_TIME = "16:45";
+
+/** Returns true if a slot letter belongs to the PQRST group */
+export function isPQRSTSlot(slot: string): boolean {
+  return (PQRST_SLOTS as readonly string[]).includes(slot);
+}
+
+/** Map each PQRST slot letter to which day (0=Mon…4=Fri) it occurs */
+export const PQRST_DAY_MAP: Record<PQRSTSlot, number> = {
+  P: 0, // Monday
+  Q: 1, // Tuesday
+  R: 2, // Wednesday
+  S: 3, // Thursday
+  T: 4, // Friday
+};
+
 // ─── Slot Grid ───────────────────────────────────────────────────────────────────────────────
-// Cols 6 and 7 use [top, bottom] tuples for split cells
+// Cols 6 and 7 use [top, bottom] tuples for split cells.
+// For days where col 6 = P/Q/R/S/T, we render a merged block instead of split cells.
 export const SLOT_GRID: (string | null | [string | null, string | null])[][] = [
   ["A", "B", "C", "D", null, "G", ["P", "H"], ["P", "M"], "J"], // Mon
   ["B", "C", "D", "E", null, "A", ["Q", "M"], ["Q", "H"], "F"], // Tue
@@ -105,6 +138,8 @@ export const SLOT_OCCURRENCES: Record<
     { day: 0, col: 7 },
     { day: 1, col: 6 },
   ],
+  // P/Q/R/S/T: individually one day each at col 6 (and conceptually col 7 too).
+  // They are handled as a merged PQRST group in the grid rendering.
   P: [{ day: 0, col: 6 }],
   Q: [{ day: 1, col: 6 }],
   R: [{ day: 2, col: 6 }],
@@ -158,7 +193,9 @@ const DEFAULT_SLOT_COLORS: Record<string, string> = {
   R: "#F9E8D5",
   S: "#D5E8F9",
   T: "#F9D5E8",
+  PQRST: "#E8D5F9",
   EXTRA_6_8: "#C4B5FD",
+  LUNCH: "#D4B8F0",
 };
 
 export function getSlotColor(slot: string): string {
@@ -220,8 +257,17 @@ export function getClassesOnDayFromEntries(
   if (dayIdx < 0 || dayIdx > 4) return [];
 
   const results: ClassInfo[] = [];
+  // Deduplicate PQRST entries — show only one per day (they're all the same course)
+  const pqrstSeenOnDay = new Set<string>(); // key: courseId
+
   for (const entry of entries) {
     if (entry.day === dayIdx) {
+      // For PQRST group, only add once per courseId per day
+      if (entry.slotGroup === "PQRST") {
+        const key = entry.courseId;
+        if (pqrstSeenOnDay.has(key)) continue;
+        pqrstSeenOnDay.add(key);
+      }
       results.push({
         id: entry.courseId,
         entryId: entry.id,
@@ -252,6 +298,12 @@ export const DAY_FULL = [
 
 export function getSlotScheduleDesc(slot: string): string {
   if (slot === "EXTRA_6_8") return "Mon–Fri 18:00–20:00";
+  if (slot === "PQRST") return "Mon–Fri 14:00–16:45 (Lab)";
+  if (isPQRSTSlot(slot)) {
+    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const dayIdx = PQRST_DAY_MAP[slot as PQRSTSlot];
+    return `${dayNames[dayIdx]} 14:00–16:45 (Lab)`;
+  }
   const occs = SLOT_OCCURRENCES[slot] ?? [];
   const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   return occs

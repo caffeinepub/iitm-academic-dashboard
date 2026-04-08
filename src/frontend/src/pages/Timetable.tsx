@@ -6,12 +6,18 @@ import type { Course, TimetableEntry } from "../types";
 import {
   EXTRA_SLOT_COL_INDEX,
   EXTRA_SLOT_TIME,
+  LUNCH_SLOT_TIME,
   PASTEL_COLORS,
+  PQRST_DAY_MAP,
+  PQRST_END_TIME,
+  PQRST_SLOTS,
+  PQRST_START_TIME,
   SLOT_GRID,
   SLOT_OCCURRENCES,
   TIME_COLUMNS,
   getSlotColor,
   getSlotScheduleDesc,
+  isPQRSTSlot,
 } from "../utils/slots";
 
 interface Props {
@@ -26,7 +32,13 @@ interface Props {
 
 const DAY_LABELS = ["MON", "TUE", "WED", "THU", "FRI"];
 const DAY_SHORTS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-const ALL_SLOTS = [...Object.keys(SLOT_OCCURRENCES).sort(), "EXTRA_6_8"];
+const ALL_SLOTS = [
+  ...Object.keys(SLOT_OCCURRENCES)
+    .filter((s) => !isPQRSTSlot(s)) // Remove individual P/Q/R/S/T
+    .sort(),
+  "PQRST", // Add the combined group
+  "EXTRA_6_8",
+];
 
 // IITM Course Database
 const IITM_COURSE_DB: Record<string, { name: string; venue: string }> = {
@@ -91,6 +103,112 @@ function getColTime(colIdx: number): { start: string; end: string } {
   };
 }
 
+// ─── Color Swatch Picker ─────────────────────────────────────────────────────
+function ColorSwatchPicker({
+  selected,
+  onChange,
+}: {
+  selected: string;
+  onChange: (c: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#6B7590",
+          marginBottom: 10,
+          fontWeight: 500,
+        }}
+      >
+        Course Color
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          marginBottom: 8,
+        }}
+      >
+        {PASTEL_COLORS.map((c) => (
+          <motion.button
+            key={c}
+            whileTap={{ scale: 0.88 }}
+            whileHover={{ scale: 1.12 }}
+            type="button"
+            onClick={() => onChange(c)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: c,
+              border:
+                selected === c
+                  ? "3px solid rgba(255,255,255,0.95)"
+                  : "2px solid rgba(255,255,255,0.15)",
+              cursor: "pointer",
+              boxShadow:
+                selected === c ? `0 0 0 3px ${c}88, 0 0 12px ${c}66` : "none",
+              transition: "border 0.15s, box-shadow 0.15s",
+              flexShrink: 0,
+            }}
+          />
+        ))}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginTop: 8,
+        }}
+      >
+        <label
+          htmlFor="color-picker-custom"
+          style={{ fontSize: 12, color: "#6B7590" }}
+        >
+          Custom:
+        </label>
+        <input
+          type="color"
+          id="color-picker-custom"
+          value={selected}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: 36,
+            height: 36,
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            background: "none",
+            padding: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            color: "#6B7590",
+            fontFamily: "monospace",
+          }}
+        >
+          {selected}
+        </span>
+        <div
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 4,
+            background: selected,
+            border: "1px solid rgba(255,255,255,0.2)",
+            flexShrink: 0,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function Timetable({
   courses,
   onAddCourse,
@@ -105,7 +223,6 @@ export function Timetable({
   const [code, setCode] = useState("");
   const [slot, setSlot] = useState("A");
   const [venue, setVenue] = useState("");
-  const [selectedColor, setSelectedColor] = useState(PASTEL_COLORS[0]);
   const [hoursPerWeek, setHoursPerWeek] = useState(3);
   const [populateMsg, setPopulateMsg] = useState("");
 
@@ -118,6 +235,13 @@ export function Timetable({
   const [evDays, setEvDays] = useState<number[]>([]); // day indices 0-4
   const [evStart, setEvStart] = useState("18:00");
   const [evEnd, setEvEnd] = useState("20:00");
+  const [evColor, setEvColor] = useState(PASTEL_COLORS[0]);
+
+  // Lunch override form
+  const [lunchFormDay, setLunchFormDay] = useState<number | null>(null);
+  const [lunchName, setLunchName] = useState("");
+  const [lunchVenue, setLunchVenue] = useState("");
+  const [lunchColor, setLunchColor] = useState(PASTEL_COLORS[3]); // warm yellow default
 
   // Manual Overrides
   const [overrides, setOverrides] = useState<DayOverride[]>(() => {
@@ -162,11 +286,38 @@ export function Timetable({
     return grid;
   }, [timetableEntries]);
 
+  // Build PQRST entries by day (for the merged block)
+  const pqrstByDay = useMemo(() => {
+    const map = new Map<number, TimetableEntry[]>();
+    for (const e of timetableEntries) {
+      if (e.slotGroup === "PQRST") {
+        const existing = map.get(e.day) ?? [];
+        // Deduplicate by courseId within same day
+        if (!existing.some((x) => x.courseId === e.courseId)) {
+          map.set(e.day, [...existing, e]);
+        }
+      }
+    }
+    return map;
+  }, [timetableEntries]);
+
   // Build extra slot entries by day
   const extraByDay = useMemo(() => {
     const map = new Map<number, TimetableEntry[]>();
     for (const e of timetableEntries) {
       if (e.slot === "EXTRA_6_8") {
+        const existing = map.get(e.day) ?? [];
+        map.set(e.day, [...existing, e]);
+      }
+    }
+    return map;
+  }, [timetableEntries]);
+
+  // Build lunch entries by day
+  const lunchByDay = useMemo(() => {
+    const map = new Map<number, TimetableEntry[]>();
+    for (const e of timetableEntries) {
+      if (e.slot === "LUNCH") {
         const existing = map.get(e.day) ?? [];
         map.set(e.day, [...existing, e]);
       }
@@ -196,20 +347,23 @@ export function Timetable({
   const handleAdd = useCallback(() => {
     if (!name.trim()) return;
     const courseId = uid();
+    // Determine the effective slot name for storage
+    const effectiveSlot = slot === "PQRST" ? "PQRST" : slot;
+    const defaultColor = getSlotColor(effectiveSlot);
     const newCourse: Course = {
       id: courseId,
       name: name.trim(),
       code: code.trim(),
-      slot,
+      slot: effectiveSlot,
       venue: venue.trim() || undefined,
-      color: selectedColor,
+      color: defaultColor,
       hoursPerWeek,
     };
     onAddCourse(newCourse);
 
     // Create TimetableEntry for each occurrence of this slot
     const newEntries: TimetableEntry[] = [];
-    if (slot === "EXTRA_6_8") {
+    if (effectiveSlot === "EXTRA_6_8") {
       // EXTRA slot: entries for all 5 days by default
       for (let day = 0; day < 5; day++) {
         newEntries.push({
@@ -223,11 +377,31 @@ export function Timetable({
           startTime: EXTRA_SLOT_TIME.start,
           endTime: EXTRA_SLOT_TIME.end,
           venue: venue.trim() || undefined,
-          color: selectedColor,
+          color: defaultColor,
+        });
+      }
+    } else if (effectiveSlot === "PQRST") {
+      // PQRST: one entry per day (Mon–Fri), slotGroup: "PQRST"
+      const pSlots = PQRST_SLOTS as readonly string[];
+      for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+        const pSlot = pSlots[dayIdx]; // P=Mon, Q=Tue, R=Wed, S=Thu, T=Fri
+        newEntries.push({
+          id: uid(),
+          courseId,
+          courseName: name.trim(),
+          courseCode: code.trim(),
+          slot: pSlot,
+          slotGroup: "PQRST",
+          day: dayIdx,
+          colIndex: 6, // col 6 is the first lab column
+          startTime: PQRST_START_TIME,
+          endTime: PQRST_END_TIME,
+          venue: venue.trim() || undefined,
+          color: defaultColor,
         });
       }
     } else {
-      const occs = SLOT_OCCURRENCES[slot] ?? [];
+      const occs = SLOT_OCCURRENCES[effectiveSlot] ?? [];
       for (const occ of occs) {
         const colTime = getColTime(occ.col);
         newEntries.push({
@@ -235,13 +409,13 @@ export function Timetable({
           courseId,
           courseName: name.trim(),
           courseCode: code.trim(),
-          slot,
+          slot: effectiveSlot,
           day: occ.day,
           colIndex: occ.col,
           startTime: colTime.start,
           endTime: colTime.end,
           venue: venue.trim() || undefined,
-          color: selectedColor,
+          color: defaultColor,
         });
       }
     }
@@ -251,7 +425,6 @@ export function Timetable({
     setCode("");
     setVenue("");
     setSlot("A");
-    setSelectedColor(PASTEL_COLORS[0]);
     setHoursPerWeek(3);
     setShowForm(false);
     setPopulateMsg("");
@@ -260,7 +433,6 @@ export function Timetable({
     code,
     slot,
     venue,
-    selectedColor,
     hoursPerWeek,
     onAddCourse,
     onAddTimetableEntries,
@@ -314,7 +486,7 @@ export function Timetable({
       code: evCode.trim(),
       slot: "EXTRA_6_8",
       venue: evVenue.trim() || undefined,
-      color: "#C4B5FD",
+      color: evColor,
     };
     onAddCourse(newCourse);
 
@@ -329,7 +501,7 @@ export function Timetable({
       startTime: evStart,
       endTime: evEnd,
       venue: evVenue.trim() || undefined,
-      color: "#C4B5FD",
+      color: evColor,
     }));
     onAddTimetableEntries(newEntries);
 
@@ -339,7 +511,40 @@ export function Timetable({
     setEvDays([]);
     setEvStart("18:00");
     setEvEnd("20:00");
+    setEvColor(PASTEL_COLORS[0]);
     setShowEveningForm(false);
+  };
+
+  const handleAddLunchOverride = (dayIdx: number) => {
+    if (!lunchName.trim()) return;
+    const courseId = uid();
+    const newCourse: Course = {
+      id: courseId,
+      name: lunchName.trim(),
+      code: "",
+      slot: "LUNCH",
+      venue: lunchVenue.trim() || undefined,
+      color: lunchColor,
+    };
+    onAddCourse(newCourse);
+    const entry: TimetableEntry = {
+      id: uid(),
+      courseId,
+      courseName: lunchName.trim(),
+      courseCode: "",
+      slot: "LUNCH",
+      day: dayIdx,
+      colIndex: 4,
+      startTime: LUNCH_SLOT_TIME.start,
+      endTime: LUNCH_SLOT_TIME.end,
+      venue: lunchVenue.trim() || undefined,
+      color: lunchColor,
+    };
+    onAddTimetableEntries([entry]);
+    setLunchName("");
+    setLunchVenue("");
+    setLunchColor(PASTEL_COLORS[3]);
+    setLunchFormDay(null);
   };
 
   const toggleEvDay = (dayIdx: number) => {
@@ -789,6 +994,7 @@ export function Timetable({
                           <motion.button
                             data-ocid={`timetable.delete_button.${i + 1}`}
                             whileTap={{ scale: 0.9 }}
+                            type="button"
                             onClick={() =>
                               saveOverrides(
                                 overrides.filter((o) => o.id !== ov.id),
@@ -868,6 +1074,7 @@ export function Timetable({
                           />
                           <motion.button
                             whileTap={{ scale: 0.95 }}
+                            type="button"
                             className="btn-gradient"
                             style={{ fontSize: 12, padding: "8px 16px" }}
                             onClick={handleAddOverride}
@@ -882,6 +1089,7 @@ export function Timetable({
                     <motion.button
                       data-ocid="timetable.override.primary_button"
                       whileTap={{ scale: 0.97 }}
+                      type="button"
                       className="glass-btn-accent"
                       style={{ fontSize: 12, padding: "8px 16px" }}
                       onClick={() => setShowOverrideForm(!showOverrideForm)}
@@ -890,6 +1098,7 @@ export function Timetable({
                     </motion.button>
                     <motion.button
                       whileTap={{ scale: 0.97 }}
+                      type="button"
                       className="glass-btn"
                       style={{
                         fontSize: 12,
@@ -979,6 +1188,7 @@ export function Timetable({
                       data-ocid="timetable.save.primary_button"
                       whileTap={{ scale: 0.97 }}
                       whileHover={{ scale: 1.03 }}
+                      type="button"
                       className="glass-btn-accent"
                       style={{
                         fontSize: 13,
@@ -995,6 +1205,7 @@ export function Timetable({
                       data-ocid="timetable.load.secondary_button"
                       whileTap={{ scale: 0.97 }}
                       whileHover={{ scale: 1.03 }}
+                      type="button"
                       className="glass-btn"
                       style={{
                         fontSize: 13,
@@ -1128,6 +1339,7 @@ export function Timetable({
                       <motion.button
                         whileTap={{ scale: 0.95 }}
                         whileHover={{ scale: 1.04 }}
+                        type="button"
                         className="glass-btn"
                         style={{
                           padding: "0 12px",
@@ -1159,7 +1371,9 @@ export function Timetable({
                         <option key={s} value={s}>
                           {s === "EXTRA_6_8"
                             ? "Extra Slot — 18:00–20:00 (all days)"
-                            : `Slot ${s} — ${getSlotScheduleDesc(s)}`}
+                            : s === "PQRST"
+                              ? "Slot PQRST — Lab 14:00–16:45 (Mon–Fri)"
+                              : `Slot ${s} — ${getSlotScheduleDesc(s)}`}
                         </option>
                       ))}
                     </select>
@@ -1197,103 +1411,6 @@ export function Timetable({
                     </div>
                   )}
 
-                  {/* Color Picker */}
-                  <div style={{ marginBottom: 18 }}>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#6B7590",
-                        marginBottom: 10,
-                        fontWeight: 500,
-                      }}
-                    >
-                      Course Color
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        flexWrap: "wrap",
-                        marginBottom: 8,
-                      }}
-                    >
-                      {PASTEL_COLORS.map((c) => (
-                        <motion.button
-                          key={c}
-                          whileTap={{ scale: 0.88 }}
-                          whileHover={{ scale: 1.12 }}
-                          onClick={() => setSelectedColor(c)}
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: "50%",
-                            background: c,
-                            border:
-                              selectedColor === c
-                                ? "3px solid rgba(255,255,255,0.95)"
-                                : "2px solid rgba(255,255,255,0.15)",
-                            cursor: "pointer",
-                            boxShadow:
-                              selectedColor === c
-                                ? `0 0 0 3px ${c}88, 0 0 12px ${c}66`
-                                : "none",
-                            transition: "border 0.15s, box-shadow 0.15s",
-                            flexShrink: 0,
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        marginTop: 8,
-                      }}
-                    >
-                      <label
-                        htmlFor="color-picker"
-                        style={{ fontSize: 12, color: "#6B7590" }}
-                      >
-                        Custom:
-                      </label>
-                      <input
-                        type="color"
-                        id="color-picker"
-                        value={selectedColor}
-                        onChange={(e) => setSelectedColor(e.target.value)}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          border: "none",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                          background: "none",
-                          padding: 0,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: "#6B7590",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {selectedColor}
-                      </span>
-                      <div
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 4,
-                          background: selectedColor,
-                          border: "1px solid rgba(255,255,255,0.2)",
-                          flexShrink: 0,
-                        }}
-                      />
-                    </div>
-                  </div>
-
                   {/* Remove individual course */}
                   {courses.length > 0 && (
                     <div
@@ -1319,7 +1436,11 @@ export function Timetable({
                           <option key={c.id} value={c.id}>
                             {c.slot === "EXTRA_6_8"
                               ? "Extra Slot"
-                              : `Slot ${c.slot}`}{" "}
+                              : c.slot === "PQRST"
+                                ? "Slot PQRST (Lab)"
+                                : c.slot === "LUNCH"
+                                  ? "Lunch Slot"
+                                  : `Slot ${c.slot}`}{" "}
                             · {c.name}
                             {c.code ? ` (${c.code})` : ""}
                           </option>
@@ -1328,6 +1449,7 @@ export function Timetable({
                       <motion.button
                         data-ocid="timetable.delete_button"
                         className="glass-btn"
+                        type="button"
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           if (removeCourseId) {
@@ -1352,6 +1474,7 @@ export function Timetable({
                     <motion.button
                       data-ocid="timetable.submit_button"
                       className="glass-btn-accent"
+                      type="button"
                       whileTap={{ scale: 0.97 }}
                       onClick={handleAdd}
                       style={{ padding: "9px 28px" }}
@@ -1360,6 +1483,7 @@ export function Timetable({
                     </motion.button>
                     <motion.button
                       className="glass-btn"
+                      type="button"
                       whileTap={{ scale: 0.97 }}
                       onClick={() => {
                         if (
@@ -1383,6 +1507,7 @@ export function Timetable({
                     </motion.button>
                     <motion.button
                       className="glass-btn"
+                      type="button"
                       whileTap={{ scale: 0.97 }}
                       onClick={handlePopulate}
                       style={{ padding: "9px 18px", fontSize: 12 }}
@@ -1479,6 +1604,7 @@ export function Timetable({
                 </div>
                 <motion.button
                   whileTap={{ scale: 0.95 }}
+                  type="button"
                   className="glass-btn"
                   style={{
                     padding: "4px 10px",
@@ -1499,6 +1625,7 @@ export function Timetable({
               <motion.button
                 data-ocid="timetable.open_modal_button"
                 whileTap={{ scale: 0.97 }}
+                type="button"
                 className="btn-gradient"
                 style={{ padding: "9px 18px", fontSize: 13, marginTop: 4 }}
                 onClick={() => setShowEveningForm(true)}
@@ -1605,10 +1732,15 @@ export function Timetable({
                     />
                   </div>
                 </div>
+
+                {/* Color picker — only for extra slot */}
+                <ColorSwatchPicker selected={evColor} onChange={setEvColor} />
+
                 <div style={{ display: "flex", gap: 8 }}>
                   <motion.button
                     data-ocid="timetable.save_button"
                     whileTap={{ scale: 0.97 }}
+                    type="button"
                     className="btn-gradient"
                     style={{ flex: 1, padding: "9px 18px", fontSize: 13 }}
                     onClick={addEveningSlotEntries}
@@ -1618,6 +1750,7 @@ export function Timetable({
                   <motion.button
                     data-ocid="timetable.cancel_button"
                     whileTap={{ scale: 0.97 }}
+                    type="button"
                     className="glass-btn"
                     style={{ padding: "9px 18px", fontSize: 13 }}
                     onClick={() => setShowEveningForm(false)}
@@ -1781,222 +1914,847 @@ export function Timetable({
 
             {/* Day rows */}
             <tbody>
-              {DAY_LABELS.map((dayLabel, dayIdx) => (
-                <tr key={dayLabel}>
-                  <td
-                    style={{
-                      background: "#0d0f1a",
-                      border: "1px solid #1e2235",
-                      textAlign: "center",
-                      padding: "4px 2px",
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "#5A6280",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    {dayLabel}
-                  </td>
+              {DAY_LABELS.map((dayLabel, dayIdx) => {
+                // Determine if PQRST is filled for this day
+                const pqrstEntries = pqrstByDay.get(dayIdx) ?? [];
+                const pqrstFilled = pqrstEntries.length > 0;
+                const pqrstFirst = pqrstEntries[0] ?? null;
 
-                  {TIME_COLUMNS.map((_col, colIdx) => {
-                    const cell = SLOT_GRID[dayIdx]?.[colIdx];
-                    const cellKey = `${dayLabel}-${colIdx}`;
+                return (
+                  <tr key={dayLabel}>
+                    <td
+                      style={{
+                        background: "#0d0f1a",
+                        border: "1px solid #1e2235",
+                        textAlign: "center",
+                        padding: "4px 2px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: "#5A6280",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      {dayLabel}
+                    </td>
 
-                    // ── Lunch cell ──
-                    if (colIdx === 4) {
-                      return (
-                        <td
-                          key={cellKey}
-                          style={{
-                            background: "#0b0d18",
-                            border: "1px solid #1e2235",
-                            textAlign: "center",
-                            verticalAlign: "middle",
-                            padding: "4px",
-                            height: 78,
-                          }}
-                        >
-                          {dayIdx === 2 && (
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                gap: 3,
-                              }}
-                            >
-                              <span style={{ fontSize: 14 }}>🍜</span>
-                              <span
+                    {TIME_COLUMNS.map((_col, colIdx) => {
+                      const cell = SLOT_GRID[dayIdx]?.[colIdx];
+                      const cellKey = `${dayLabel}-${colIdx}`;
+
+                      // ── Lunch cell ──
+                      if (colIdx === 4) {
+                        const lunchEntries = lunchByDay.get(dayIdx) ?? [];
+                        const lunchFilled = lunchEntries.length > 0;
+                        const lunchFirst = lunchEntries[0] ?? null;
+                        const isFormOpen = lunchFormDay === dayIdx;
+
+                        return (
+                          <td
+                            key={cellKey}
+                            onKeyDown={(e) => {
+                              if (
+                                (e.key === "Enter" || e.key === " ") &&
+                                lunchFilled &&
+                                lunchFirst
+                              ) {
+                                setDeleteCell({
+                                  entryId: lunchFirst.id,
+                                  label: `${lunchFirst.courseName} (Lunch ${DAY_SHORTS[dayIdx]})`,
+                                });
+                              }
+                            }}
+                            style={{
+                              background: lunchFilled
+                                ? (lunchFirst?.color ?? "rgba(212,184,240,0.3)")
+                                : "#0b0d18",
+                              border: "1px solid #1e2235",
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              padding: "4px",
+                              height: 78,
+                              cursor: lunchFilled ? "pointer" : "default",
+                              WebkitPrintColorAdjust: "exact",
+                              // @ts-ignore
+                              printColorAdjust: "exact",
+                            }}
+                            onClick={() => {
+                              if (lunchFilled && lunchFirst) {
+                                setDeleteCell({
+                                  entryId: lunchFirst.id,
+                                  label: `${lunchFirst.courseName} (Lunch ${DAY_SHORTS[dayIdx]})`,
+                                });
+                              }
+                            }}
+                          >
+                            {lunchFilled && lunchFirst ? (
+                              <div
                                 style={{
-                                  fontSize: 9,
-                                  color: "rgba(180,190,255,0.25)",
-                                  fontWeight: 600,
-                                  letterSpacing: "0.1em",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  gap: 1,
                                 }}
                               >
-                                LUNCH
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                      );
-                    }
-
-                    // ── Split cell (cols 6 & 7) ──
-                    if (colIdx === 6 || colIdx === 7) {
-                      const pair = cell as [string | null, string | null];
-                      const topSlot = pair?.[0] ?? null;
-                      const bottomSlot = pair?.[1] ?? null;
-
-                      // Top entries
-                      const topEntries = topSlot
-                        ? (entryGrid.get(`${dayIdx}__${colIdx}`) ?? []).filter(
-                            (e) => e.slot === topSlot,
-                          )
-                        : [];
-                      // Bottom entries
-                      const bottomEntries = bottomSlot
-                        ? (entryGrid.get(`${dayIdx}__${colIdx}`) ?? []).filter(
-                            (e) => e.slot === bottomSlot,
-                          )
-                        : [];
-
-                      const topOverrideInfo = topSlot
-                        ? (overrideLookup.get(`${dayLabel}__${topSlot}`) ??
-                          null)
-                        : null;
-                      const topFilled =
-                        topEntries.length > 0 || !!topOverrideInfo?.name;
-                      const topBg = topEntries[0]?.color ?? null;
-
-                      const botOverrideInfo = bottomSlot
-                        ? (overrideLookup.get(`${dayLabel}__${bottomSlot}`) ??
-                          null)
-                        : null;
-                      const botFilled =
-                        bottomEntries.length > 0 || !!botOverrideInfo?.name;
-                      const botBg = bottomEntries[0]?.color ?? null;
-
-                      const renderHalfCell = (
-                        slotName: string | null,
-                        entries: TimetableEntry[],
-                        overrideInfo: { name: string; time?: string } | null,
-                        isFilled: boolean,
-                        bgColor: string | null,
-                        isTop: boolean,
-                      ) => (
-                        <td
-                          onClick={() => {
-                            if (!isFilled) return;
-                            if (entries.length === 1) {
-                              const e = entries[0];
-                              setDeleteCell({
-                                entryId: e.id,
-                                label: `${e.courseName} (${DAY_SHORTS[dayIdx]} ${e.startTime})`,
-                              });
-                            } else if (overrideInfo?.name && slotName) {
-                              setDeleteCell({
-                                overrideKey: `${dayLabel}__${slotName}`,
-                                label: overrideInfo.name,
-                              });
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ")
-                              e.currentTarget.click();
-                          }}
-                          style={{
-                            height: "50%",
-                            borderTop: isTop ? undefined : "1px solid #1e2235",
-                            background: overrideInfo?.name
-                              ? "rgba(139,92,246,0.22)"
-                              : (bgColor ?? "#13151f"),
-                            textAlign: "center",
-                            verticalAlign: "middle",
-                            padding: "4px 3px",
-                            cursor: isFilled ? "pointer" : "default",
-                            WebkitPrintColorAdjust: "exact",
-                            // @ts-ignore
-                            printColorAdjust: "exact",
-                          }}
-                        >
-                          {slotName && (
-                            <>
-                              <span
-                                style={{
-                                  fontSize: 9,
-                                  fontWeight: 700,
-                                  color: isFilled
-                                    ? "rgba(0,0,0,0.6)"
-                                    : "#2A3050",
-                                  lineHeight: 1,
-                                  display: "block",
-                                }}
-                              >
-                                ({slotName})
-                              </span>
-                              {isFilled &&
-                                (entries.length > 1 ? (
-                                  <div
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    color: "rgba(0,0,0,0.85)",
+                                    lineHeight: 1.15,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    maxWidth: "95%",
+                                    display: "block",
+                                  }}
+                                >
+                                  {lunchFirst.courseName}
+                                </span>
+                                {lunchFirst.venue && (
+                                  <span
                                     style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      gap: 1,
+                                      fontSize: 8,
+                                      color: "rgba(0,0,0,0.55)",
+                                      display: "block",
                                     }}
                                   >
-                                    {entries.map((entry) => (
-                                      <button
-                                        key={entry.id}
-                                        type="button"
-                                        onClick={(ev) => {
-                                          ev.stopPropagation();
-                                          setDeleteCell({
-                                            entryId: entry.id,
-                                            label: `${entry.courseName} (${DAY_SHORTS[dayIdx]} ${entry.startTime})`,
-                                          });
-                                        }}
+                                    {lunchFirst.venue}
+                                  </span>
+                                )}
+                                <span
+                                  className="print-hide"
+                                  style={{
+                                    fontSize: 7,
+                                    color: "rgba(0,0,0,0.35)",
+                                    marginTop: 1,
+                                  }}
+                                >
+                                  tap to remove
+                                </span>
+                              </div>
+                            ) : isFormOpen ? (
+                              <div
+                                style={{
+                                  padding: "4px 6px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                }}
+                              >
+                                <input
+                                  className="glass-input"
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "2px 4px",
+                                    width: "100%",
+                                  }}
+                                  placeholder="Class name"
+                                  value={lunchName}
+                                  onChange={(e) => setLunchName(e.target.value)}
+                                />
+                                <input
+                                  className="glass-input"
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "2px 4px",
+                                    width: "100%",
+                                  }}
+                                  placeholder="Venue"
+                                  value={lunchVenue}
+                                  onChange={(e) =>
+                                    setLunchVenue(e.target.value)
+                                  }
+                                />
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 3,
+                                    flexWrap: "wrap",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {PASTEL_COLORS.slice(0, 8).map((c) => (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      onClick={() => setLunchColor(c)}
+                                      style={{
+                                        width: 14,
+                                        height: 14,
+                                        borderRadius: "50%",
+                                        background: c,
+                                        border:
+                                          lunchColor === c
+                                            ? "2px solid rgba(255,255,255,0.9)"
+                                            : "1px solid rgba(255,255,255,0.2)",
+                                        cursor: "pointer",
+                                        padding: 0,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                                <div style={{ display: "flex", gap: 3 }}>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleAddLunchOverride(dayIdx)
+                                    }
+                                    style={{
+                                      flex: 1,
+                                      fontSize: 8,
+                                      padding: "2px 4px",
+                                      background:
+                                        "linear-gradient(135deg, #7c3aed, #2563eb)",
+                                      color: "#fff",
+                                      border: "none",
+                                      borderRadius: 4,
+                                      cursor: "pointer",
+                                      fontFamily: "inherit",
+                                    }}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLunchFormDay(null)}
+                                    style={{
+                                      fontSize: 8,
+                                      padding: "2px 4px",
+                                      background: "rgba(255,255,255,0.06)",
+                                      color: "#6B7590",
+                                      border:
+                                        "1px solid rgba(255,255,255,0.08)",
+                                      borderRadius: 4,
+                                      cursor: "pointer",
+                                      fontFamily: "inherit",
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  gap: 3,
+                                }}
+                              >
+                                {dayIdx === 2 && (
+                                  <>
+                                    <span style={{ fontSize: 14 }}>🍜</span>
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        color: "rgba(180,190,255,0.25)",
+                                        fontWeight: 600,
+                                        letterSpacing: "0.1em",
+                                      }}
+                                    >
+                                      LUNCH
+                                    </span>
+                                  </>
+                                )}
+                                <button
+                                  type="button"
+                                  className="print-hide"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLunchFormDay(dayIdx);
+                                    setLunchName("");
+                                    setLunchVenue("");
+                                  }}
+                                  style={{
+                                    fontSize: 7,
+                                    color: "rgba(167,139,250,0.5)",
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "1px 3px",
+                                    fontFamily: "inherit",
+                                  }}
+                                >
+                                  + add
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      }
+
+                      // ── PQRST merged block — col 6 renders a colSpan=2 cell, col 7 skipped ──
+                      if (colIdx === 6) {
+                        // Check if this day's col 6 has a PQRST slot (P/Q/R/S/T in top position)
+                        const slotPair = cell as [string | null, string | null];
+                        const topSlot = slotPair?.[0] ?? null;
+                        const isPQRST = topSlot ? isPQRSTSlot(topSlot) : false;
+
+                        if (isPQRST) {
+                          // Render a single cell spanning both lab columns
+                          return (
+                            <td
+                              key={cellKey}
+                              colSpan={2}
+                              onClick={() => {
+                                if (!pqrstFilled) return;
+                                if (pqrstFirst) {
+                                  setDeleteCell({
+                                    entryId: pqrstFirst.id,
+                                    label: `${pqrstFirst.courseName} (${DAY_SHORTS[dayIdx]} Lab 14:00–16:45)`,
+                                  });
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (
+                                  (e.key === "Enter" || e.key === " ") &&
+                                  pqrstFilled &&
+                                  pqrstFirst
+                                ) {
+                                  setDeleteCell({
+                                    entryId: pqrstFirst.id,
+                                    label: `${pqrstFirst.courseName} (${DAY_SHORTS[dayIdx]} Lab)`,
+                                  });
+                                }
+                              }}
+                              style={{
+                                background: pqrstFilled
+                                  ? (pqrstFirst?.color ?? "#E8D5F9")
+                                  : "#0d0f1a",
+                                border: "1px solid #1e2235",
+                                textAlign: "center",
+                                verticalAlign: "middle",
+                                padding: "6px 4px",
+                                height: 78,
+                                cursor: pqrstFilled ? "pointer" : "default",
+                                WebkitPrintColorAdjust: "exact",
+                                // @ts-ignore
+                                printColorAdjust: "exact",
+                              }}
+                            >
+                              {pqrstFilled && pqrstFirst ? (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    gap: 2,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: 8,
+                                      fontWeight: 600,
+                                      color: "rgba(0,0,0,0.5)",
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    ({topSlot})
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: 800,
+                                      color: "rgba(0,0,0,0.88)",
+                                      lineHeight: 1.15,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "95%",
+                                      display: "block",
+                                    }}
+                                  >
+                                    {pqrstFirst.courseCode || ""}
+                                  </span>
+                                  {pqrstFirst.courseName && (
+                                    <span
+                                      style={{
+                                        fontSize: 9,
+                                        color: "rgba(0,0,0,0.65)",
+                                        lineHeight: 1.2,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        maxWidth: "95%",
+                                        display: "block",
+                                      }}
+                                    >
+                                      {pqrstFirst.courseName.length > 16
+                                        ? `${pqrstFirst.courseName.slice(0, 15)}…`
+                                        : pqrstFirst.courseName}
+                                    </span>
+                                  )}
+                                  {pqrstFirst.venue && (
+                                    <span
+                                      style={{
+                                        fontSize: 8,
+                                        color: "rgba(0,0,0,0.5)",
+                                        display: "block",
+                                      }}
+                                    >
+                                      {pqrstFirst.venue}
+                                    </span>
+                                  )}
+                                  <span
+                                    className="print-hide"
+                                    style={{
+                                      fontSize: 7,
+                                      color: "rgba(0,0,0,0.35)",
+                                      marginTop: 1,
+                                    }}
+                                  >
+                                    tap to remove
+                                  </span>
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    gap: 2,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: 8,
+                                      fontWeight: 600,
+                                      color: "#2A3050",
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    ({topSlot})
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 7,
+                                      color: "#1e2235",
+                                    }}
+                                  >
+                                    Lab 14:00–16:45
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // Not PQRST — render normal split cell for col 6
+                        const pair = cell as [string | null, string | null];
+                        const topSlotNormal = pair?.[0] ?? null;
+                        const bottomSlotNormal = pair?.[1] ?? null;
+
+                        const topEntries = topSlotNormal
+                          ? (
+                              entryGrid.get(`${dayIdx}__${colIdx}`) ?? []
+                            ).filter((e) => e.slot === topSlotNormal)
+                          : [];
+                        const bottomEntries = bottomSlotNormal
+                          ? (
+                              entryGrid.get(`${dayIdx}__${colIdx}`) ?? []
+                            ).filter((e) => e.slot === bottomSlotNormal)
+                          : [];
+
+                        const topOverrideInfo = topSlotNormal
+                          ? (overrideLookup.get(
+                              `${dayLabel}__${topSlotNormal}`,
+                            ) ?? null)
+                          : null;
+                        const topFilled =
+                          topEntries.length > 0 || !!topOverrideInfo?.name;
+                        const topBg = topEntries[0]?.color ?? null;
+
+                        const botOverrideInfo = bottomSlotNormal
+                          ? (overrideLookup.get(
+                              `${dayLabel}__${bottomSlotNormal}`,
+                            ) ?? null)
+                          : null;
+                        const botFilled =
+                          bottomEntries.length > 0 || !!botOverrideInfo?.name;
+                        const botBg = bottomEntries[0]?.color ?? null;
+
+                        const renderHalfCell = (
+                          slotName: string | null,
+                          entries: TimetableEntry[],
+                          overrideInfo: { name: string; time?: string } | null,
+                          isFilled: boolean,
+                          bgColor: string | null,
+                          isTop: boolean,
+                        ) => (
+                          <td
+                            onClick={() => {
+                              if (!isFilled) return;
+                              if (entries.length === 1) {
+                                const e = entries[0];
+                                setDeleteCell({
+                                  entryId: e.id,
+                                  label: `${e.courseName} (${DAY_SHORTS[dayIdx]} ${e.startTime})`,
+                                });
+                              } else if (overrideInfo?.name && slotName) {
+                                setDeleteCell({
+                                  overrideKey: `${dayLabel}__${slotName}`,
+                                  label: overrideInfo.name,
+                                });
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ")
+                                e.currentTarget.click();
+                            }}
+                            style={{
+                              height: "50%",
+                              borderTop: isTop
+                                ? undefined
+                                : "1px solid #1e2235",
+                              background: overrideInfo?.name
+                                ? "rgba(139,92,246,0.22)"
+                                : (bgColor ?? "#13151f"),
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              padding: "4px 3px",
+                              cursor: isFilled ? "pointer" : "default",
+                              WebkitPrintColorAdjust: "exact",
+                              // @ts-ignore
+                              printColorAdjust: "exact",
+                            }}
+                          >
+                            {slotName && (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    color: isFilled
+                                      ? "rgba(0,0,0,0.6)"
+                                      : "#2A3050",
+                                    lineHeight: 1,
+                                    display: "block",
+                                  }}
+                                >
+                                  ({slotName})
+                                </span>
+                                {isFilled &&
+                                  (entries.length > 1 ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: 1,
+                                      }}
+                                    >
+                                      {entries.map((entry) => (
+                                        <button
+                                          key={entry.id}
+                                          type="button"
+                                          onClick={(ev) => {
+                                            ev.stopPropagation();
+                                            setDeleteCell({
+                                              entryId: entry.id,
+                                              label: `${entry.courseName} (${DAY_SHORTS[dayIdx]} ${entry.startTime})`,
+                                            });
+                                          }}
+                                          style={{
+                                            padding: "1px 2px",
+                                            borderRadius: 3,
+                                            background: entry.color
+                                              ? `${entry.color}CC`
+                                              : "rgba(139,92,246,0.3)",
+                                            cursor: "pointer",
+                                            border: "none",
+                                            width: "100%",
+                                            fontFamily: "inherit",
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: 7,
+                                              fontWeight: 800,
+                                              color: "rgba(0,0,0,0.88)",
+                                              display: "block",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                              whiteSpace: "nowrap",
+                                            }}
+                                          >
+                                            {entry.courseCode ||
+                                              entry.courseName.slice(0, 6)}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: 6,
+                                              color: "rgba(0,0,0,0.6)",
+                                              display: "block",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                              whiteSpace: "nowrap",
+                                            }}
+                                          >
+                                            {entry.courseName.slice(0, 9)}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ) : entries[0] ? (
+                                    <>
+                                      <span
                                         style={{
-                                          padding: "1px 2px",
-                                          borderRadius: 3,
-                                          background: entry.color
-                                            ? `${entry.color}CC`
-                                            : "rgba(139,92,246,0.3)",
-                                          cursor: "pointer",
-                                          border: "none",
-                                          width: "100%",
-                                          fontFamily: "inherit",
+                                          fontSize: 9,
+                                          fontWeight: 800,
+                                          color: "rgba(0,0,0,0.85)",
+                                          lineHeight: 1.1,
+                                          marginTop: 1,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                          maxWidth: "100%",
+                                          display: "block",
+                                          textAlign: "center",
                                         }}
                                       >
+                                        {overrideInfo?.name ||
+                                          entries[0].courseCode ||
+                                          entries[0].courseName?.slice(0, 6)}
+                                      </span>
+                                      {entries[0].courseName && (
                                         <span
                                           style={{
                                             fontSize: 7,
-                                            fontWeight: 800,
-                                            color: "rgba(0,0,0,0.88)",
-                                            display: "block",
+                                            color: "rgba(0,0,0,0.55)",
                                             overflow: "hidden",
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",
+                                            maxWidth: "100%",
+                                            display: "block",
+                                            textAlign: "center",
                                           }}
                                         >
-                                          {entry.courseCode ||
-                                            entry.courseName.slice(0, 6)}
+                                          {entries[0].courseName.length > 10
+                                            ? `${entries[0].courseName.slice(0, 9)}…`
+                                            : entries[0].courseName}
                                         </span>
+                                      )}
+                                      {entries[0].venue && (
                                         <span
                                           style={{
                                             fontSize: 6,
-                                            color: "rgba(0,0,0,0.6)",
-                                            display: "block",
+                                            color: "rgba(0,0,0,0.45)",
                                             overflow: "hidden",
                                             textOverflow: "ellipsis",
                                             whiteSpace: "nowrap",
+                                            maxWidth: "100%",
+                                            display: "block",
+                                            textAlign: "center",
                                           }}
                                         >
-                                          {entry.courseName.slice(0, 9)}
+                                          {entries[0].venue}
                                         </span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : entries[0] ? (
+                                      )}
+                                      <span
+                                        className="print-hide"
+                                        style={{
+                                          fontSize: 7,
+                                          color: "rgba(0,0,0,0.35)",
+                                          marginTop: 1,
+                                        }}
+                                      >
+                                        tap to remove
+                                      </span>
+                                    </>
+                                  ) : overrideInfo?.name ? (
+                                    <>
+                                      <span
+                                        style={{
+                                          fontSize: 9,
+                                          fontWeight: 800,
+                                          color: "rgba(0,0,0,0.85)",
+                                          lineHeight: 1.1,
+                                          marginTop: 1,
+                                          display: "block",
+                                        }}
+                                      >
+                                        {overrideInfo.name}
+                                      </span>
+                                      {overrideInfo.time && (
+                                        <span
+                                          style={{
+                                            fontSize: 6,
+                                            color: "rgba(0,0,0,0.4)",
+                                            lineHeight: 1,
+                                          }}
+                                        >
+                                          ⏰ {overrideInfo.time}
+                                        </span>
+                                      )}
+                                      <span
+                                        className="print-hide"
+                                        style={{
+                                          fontSize: 7,
+                                          color: "rgba(0,0,0,0.35)",
+                                          marginTop: 1,
+                                        }}
+                                      >
+                                        tap to remove
+                                      </span>
+                                    </>
+                                  ) : null)}
+                              </>
+                            )}
+                          </td>
+                        );
+
+                        return (
+                          <td
+                            key={cellKey}
+                            style={{
+                              border: "1px solid #1e2235",
+                              padding: 0,
+                              height: 78,
+                              verticalAlign: "stretch",
+                            }}
+                          >
+                            <table
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                borderCollapse: "collapse",
+                              }}
+                            >
+                              <tbody>
+                                <tr>
+                                  {renderHalfCell(
+                                    topSlotNormal,
+                                    topEntries,
+                                    topOverrideInfo,
+                                    topFilled,
+                                    topBg,
+                                    true,
+                                  )}
+                                </tr>
+                                <tr>
+                                  {renderHalfCell(
+                                    bottomSlotNormal,
+                                    bottomEntries,
+                                    botOverrideInfo,
+                                    botFilled,
+                                    botBg,
+                                    false,
+                                  )}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </td>
+                        );
+                      }
+
+                      // ── Col 7: skip if the day has a PQRST block (already rendered with colSpan=2 at col 6) ──
+                      if (colIdx === 7) {
+                        const col6Cell = SLOT_GRID[dayIdx]?.[6];
+                        const col6Pair = col6Cell as [
+                          string | null,
+                          string | null,
+                        ];
+                        const col6Top = col6Pair?.[0] ?? null;
+                        if (col6Top && isPQRSTSlot(col6Top)) {
+                          // Skip — already spanned by col 6
+                          return null;
+                        }
+
+                        // Normal split cell for col 7
+                        const pair7 = cell as [string | null, string | null];
+                        const topSlot7 = pair7?.[0] ?? null;
+                        const bottomSlot7 = pair7?.[1] ?? null;
+
+                        const topEntries7 = topSlot7
+                          ? (
+                              entryGrid.get(`${dayIdx}__${colIdx}`) ?? []
+                            ).filter((e) => e.slot === topSlot7)
+                          : [];
+                        const bottomEntries7 = bottomSlot7
+                          ? (
+                              entryGrid.get(`${dayIdx}__${colIdx}`) ?? []
+                            ).filter((e) => e.slot === bottomSlot7)
+                          : [];
+
+                        const topOvInfo7 = topSlot7
+                          ? (overrideLookup.get(`${dayLabel}__${topSlot7}`) ??
+                            null)
+                          : null;
+                        const topFilled7 =
+                          topEntries7.length > 0 || !!topOvInfo7?.name;
+                        const topBg7 = topEntries7[0]?.color ?? null;
+
+                        const botOvInfo7 = bottomSlot7
+                          ? (overrideLookup.get(
+                              `${dayLabel}__${bottomSlot7}`,
+                            ) ?? null)
+                          : null;
+                        const botFilled7 =
+                          bottomEntries7.length > 0 || !!botOvInfo7?.name;
+                        const botBg7 = bottomEntries7[0]?.color ?? null;
+
+                        const renderHalf7 = (
+                          slotName: string | null,
+                          entries: TimetableEntry[],
+                          overrideInfo: { name: string; time?: string } | null,
+                          isFilled: boolean,
+                          bgColor: string | null,
+                          isTop: boolean,
+                        ) => (
+                          <td
+                            onClick={() => {
+                              if (!isFilled) return;
+                              if (entries.length === 1) {
+                                const e = entries[0];
+                                setDeleteCell({
+                                  entryId: e.id,
+                                  label: `${e.courseName} (${DAY_SHORTS[dayIdx]} ${e.startTime})`,
+                                });
+                              } else if (overrideInfo?.name && slotName) {
+                                setDeleteCell({
+                                  overrideKey: `${dayLabel}__${slotName}`,
+                                  label: overrideInfo.name,
+                                });
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ")
+                                e.currentTarget.click();
+                            }}
+                            style={{
+                              height: "50%",
+                              borderTop: isTop
+                                ? undefined
+                                : "1px solid #1e2235",
+                              background: overrideInfo?.name
+                                ? "rgba(139,92,246,0.22)"
+                                : (bgColor ?? "#13151f"),
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              padding: "4px 3px",
+                              cursor: isFilled ? "pointer" : "default",
+                              WebkitPrintColorAdjust: "exact",
+                              // @ts-ignore
+                              printColorAdjust: "exact",
+                            }}
+                          >
+                            {slotName && (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    color: isFilled
+                                      ? "rgba(0,0,0,0.6)"
+                                      : "#2A3050",
+                                    lineHeight: 1,
+                                    display: "block",
+                                  }}
+                                >
+                                  ({slotName})
+                                </span>
+                                {isFilled && entries[0] && (
                                   <>
                                     <span
                                       style={{
@@ -2062,259 +2820,226 @@ export function Timetable({
                                       tap to remove
                                     </span>
                                   </>
-                                ) : overrideInfo?.name ? (
-                                  <>
-                                    <span
-                                      style={{
-                                        fontSize: 9,
-                                        fontWeight: 800,
-                                        color: "rgba(0,0,0,0.85)",
-                                        lineHeight: 1.1,
-                                        marginTop: 1,
-                                        display: "block",
-                                      }}
-                                    >
-                                      {overrideInfo.name}
-                                    </span>
-                                    {overrideInfo.time && (
-                                      <span
-                                        style={{
-                                          fontSize: 6,
-                                          color: "rgba(0,0,0,0.4)",
-                                          lineHeight: 1,
-                                        }}
-                                      >
-                                        ⏰ {overrideInfo.time}
-                                      </span>
-                                    )}
-                                    <span
-                                      className="print-hide"
-                                      style={{
-                                        fontSize: 7,
-                                        color: "rgba(0,0,0,0.35)",
-                                        marginTop: 1,
-                                      }}
-                                    >
-                                      tap to remove
-                                    </span>
-                                  </>
-                                ) : null)}
-                            </>
-                          )}
-                        </td>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        );
+
+                        return (
+                          <td
+                            key={`${dayLabel}-7`}
+                            style={{
+                              border: "1px solid #1e2235",
+                              padding: 0,
+                              height: 78,
+                              verticalAlign: "stretch",
+                            }}
+                          >
+                            <table
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                borderCollapse: "collapse",
+                              }}
+                            >
+                              <tbody>
+                                <tr>
+                                  {renderHalf7(
+                                    topSlot7,
+                                    topEntries7,
+                                    topOvInfo7,
+                                    topFilled7,
+                                    topBg7,
+                                    true,
+                                  )}
+                                </tr>
+                                <tr>
+                                  {renderHalf7(
+                                    bottomSlot7,
+                                    bottomEntries7,
+                                    botOvInfo7,
+                                    botFilled7,
+                                    botBg7,
+                                    false,
+                                  )}
+                                </tr>
+                              </tbody>
+                            </table>
+                          </td>
+                        );
+                      }
+
+                      // ── Normal cell ──
+                      const slotLetter = cell as string | null;
+                      const cellEntries = slotLetter
+                        ? (entryGrid.get(`${dayIdx}__${colIdx}`) ?? []).filter(
+                            (e) => e.slot === slotLetter,
+                          )
+                        : [];
+                      const { filled, bg, content } = renderCellEntries(
+                        cellEntries,
+                        slotLetter,
+                        dayLabel,
+                        colIdx,
                       );
 
                       return (
-                        <td
+                        <motion.td
                           key={cellKey}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{
+                            delay: (dayIdx * 9 + colIdx) * 0.008,
+                            duration: 0.25,
+                          }}
+                          onClick={() => {
+                            if (!filled || cellEntries.length !== 1) return;
+                            const entry = cellEntries[0];
+                            setDeleteCell({
+                              entryId: entry.id,
+                              label: `${entry.courseName} (${DAY_SHORTS[dayIdx]} ${entry.startTime})`,
+                            });
+                          }}
                           style={{
                             border: "1px solid #1e2235",
-                            padding: 0,
+                            background: bg,
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            padding: "4px 3px",
                             height: 78,
-                            verticalAlign: "stretch",
+                            cursor: filled ? "pointer" : "default",
+                            WebkitPrintColorAdjust: "exact",
+                            // @ts-ignore
+                            printColorAdjust: "exact",
+                            position: "relative",
                           }}
                         >
-                          <table
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              borderCollapse: "collapse",
-                            }}
-                          >
-                            <tbody>
-                              <tr>
-                                {renderHalfCell(
-                                  topSlot,
-                                  topEntries,
-                                  topOverrideInfo,
-                                  topFilled,
-                                  topBg,
-                                  true,
-                                )}
-                              </tr>
-                              <tr>
-                                {renderHalfCell(
-                                  bottomSlot,
-                                  bottomEntries,
-                                  botOverrideInfo,
-                                  botFilled,
-                                  botBg,
-                                  false,
-                                )}
-                              </tr>
-                            </tbody>
-                          </table>
-                        </td>
+                          {content}
+                        </motion.td>
                       );
-                    }
+                    })}
 
-                    // ── Normal cell ──
-                    const slotLetter = cell as string | null;
-                    const cellEntries = slotLetter
-                      ? (entryGrid.get(`${dayIdx}__${colIdx}`) ?? []).filter(
-                          (e) => e.slot === slotLetter,
-                        )
-                      : [];
-                    const { filled, bg, content } = renderCellEntries(
-                      cellEntries,
-                      slotLetter,
-                      dayLabel,
-                      colIdx,
-                    );
-
-                    return (
-                      <motion.td
-                        key={cellKey}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{
-                          delay: (dayIdx * 9 + colIdx) * 0.008,
-                          duration: 0.25,
-                        }}
-                        onClick={() => {
-                          if (!filled || cellEntries.length !== 1) return;
-                          const entry = cellEntries[0];
-                          setDeleteCell({
-                            entryId: entry.id,
-                            label: `${entry.courseName} (${DAY_SHORTS[dayIdx]} ${entry.startTime})`,
-                          });
-                        }}
-                        style={{
-                          border: "1px solid #1e2235",
-                          background: bg,
-                          textAlign: "center",
-                          verticalAlign: "middle",
-                          padding: "4px 3px",
-                          height: 78,
-                          cursor: filled ? "pointer" : "default",
-                          WebkitPrintColorAdjust: "exact",
-                          // @ts-ignore
-                          printColorAdjust: "exact",
-                          position: "relative",
-                        }}
-                      >
-                        {content}
-                      </motion.td>
-                    );
-                  })}
-
-                  {/* Extra slot column */}
-                  {(() => {
-                    const active = extraByDay.get(dayIdx) ?? [];
-                    return (
-                      <td
-                        key={`extra-${dayLabel}`}
-                        style={{
-                          background:
-                            active.length > 0
-                              ? "rgba(167,139,250,0.18)"
-                              : "#0d0f1a",
-                          border: "1px solid #1e2235",
-                          textAlign: "center",
-                          verticalAlign: "middle",
-                          padding: 4,
-                          height: 78,
-                        }}
-                      >
-                        {active.length > 0 && (
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "center",
-                              gap: 2,
-                            }}
-                          >
-                            {active.map((entry) => (
-                              <button
-                                key={entry.id}
-                                type="button"
-                                onClick={() =>
-                                  setDeleteCell({
-                                    entryId: entry.id,
-                                    label: `${entry.courseName} (${DAY_SHORTS[dayIdx]} extra)`,
-                                  })
-                                }
-                                style={{
-                                  padding: "2px 4px",
-                                  borderRadius: 4,
-                                  background: "rgba(167,139,250,0.25)",
-                                  cursor: "pointer",
-                                  border: "none",
-                                  width: "100%",
-                                  fontFamily: "inherit",
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <span
+                    {/* Extra slot column */}
+                    {(() => {
+                      const active = extraByDay.get(dayIdx) ?? [];
+                      return (
+                        <td
+                          key={`extra-${dayLabel}`}
+                          style={{
+                            background:
+                              active.length > 0
+                                ? "rgba(167,139,250,0.18)"
+                                : "#0d0f1a",
+                            border: "1px solid #1e2235",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            padding: 4,
+                            height: 78,
+                          }}
+                        >
+                          {active.length > 0 && (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: 2,
+                              }}
+                            >
+                              {active.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setDeleteCell({
+                                      entryId: entry.id,
+                                      label: `${entry.courseName} (${DAY_SHORTS[dayIdx]} extra)`,
+                                    })
+                                  }
                                   style={{
-                                    fontSize: 8,
-                                    fontWeight: 800,
-                                    color: "#e0d4ff",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                    maxWidth: "95%",
-                                    display: "block",
+                                    padding: "2px 4px",
+                                    borderRadius: 4,
+                                    background: entry.color
+                                      ? `${entry.color}AA`
+                                      : "rgba(167,139,250,0.25)",
+                                    cursor: "pointer",
+                                    border: "none",
+                                    width: "100%",
+                                    fontFamily: "inherit",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
                                   }}
                                 >
-                                  {entry.courseCode ||
-                                    entry.courseName.slice(0, 8)}
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: 7,
-                                    color: "rgba(196,181,253,0.8)",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                    maxWidth: "95%",
-                                    display: "block",
-                                  }}
-                                >
-                                  {entry.courseName.length > 12
-                                    ? `${entry.courseName.slice(0, 11)}…`
-                                    : entry.courseName}
-                                </span>
-                                {entry.venue && (
                                   <span
                                     style={{
-                                      fontSize: 6,
-                                      color: "rgba(196,181,253,0.5)",
+                                      fontSize: 8,
+                                      fontWeight: 800,
+                                      color: "#e0d4ff",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "95%",
                                       display: "block",
                                     }}
                                   >
-                                    {entry.venue}
+                                    {entry.courseCode ||
+                                      entry.courseName.slice(0, 8)}
                                   </span>
-                                )}
-                                <span
-                                  style={{
-                                    fontSize: 6,
-                                    color: "rgba(167,139,250,0.6)",
-                                  }}
-                                >
-                                  {entry.startTime}–{entry.endTime}
-                                </span>
-                                <span
-                                  className="print-hide"
-                                  style={{
-                                    fontSize: 6,
-                                    color: "rgba(167,139,250,0.4)",
-                                  }}
-                                >
-                                  tap to remove
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })()}
-                </tr>
-              ))}
+                                  <span
+                                    style={{
+                                      fontSize: 7,
+                                      color: "rgba(196,181,253,0.8)",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "95%",
+                                      display: "block",
+                                    }}
+                                  >
+                                    {entry.courseName.length > 12
+                                      ? `${entry.courseName.slice(0, 11)}…`
+                                      : entry.courseName}
+                                  </span>
+                                  {entry.venue && (
+                                    <span
+                                      style={{
+                                        fontSize: 6,
+                                        color: "rgba(196,181,253,0.5)",
+                                        display: "block",
+                                      }}
+                                    >
+                                      {entry.venue}
+                                    </span>
+                                  )}
+                                  <span
+                                    style={{
+                                      fontSize: 6,
+                                      color: "rgba(167,139,250,0.6)",
+                                    }}
+                                  >
+                                    {entry.startTime}–{entry.endTime}
+                                  </span>
+                                  <span
+                                    className="print-hide"
+                                    style={{
+                                      fontSize: 6,
+                                      color: "rgba(167,139,250,0.4)",
+                                    }}
+                                  >
+                                    tap to remove
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })()}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -2356,7 +3081,13 @@ export function Timetable({
                     }}
                   />
                   <span style={{ fontWeight: 700, color: "#B0BAD0" }}>
-                    {c.slot === "EXTRA_6_8" ? "Extra" : `Slot ${c.slot}`}
+                    {c.slot === "EXTRA_6_8"
+                      ? "Extra"
+                      : c.slot === "PQRST"
+                        ? "Lab PQRST"
+                        : c.slot === "LUNCH"
+                          ? "Lunch"
+                          : `Slot ${c.slot}`}
                   </span>
                   <span style={{ color: "#4A5270" }}>—</span>
                   <span style={{ color: "#8B95B0" }}>{c.code || c.name}</span>
@@ -2463,7 +3194,11 @@ export function Timetable({
                   >
                     {c.slot === "EXTRA_6_8"
                       ? "Extra Slot (18:00–20:00)"
-                      : `Slot ${c.slot}`}
+                      : c.slot === "PQRST"
+                        ? "Lab Slot PQRST (14:00–16:45)"
+                        : c.slot === "LUNCH"
+                          ? "Lunch Slot (12:00–13:00)"
+                          : `Slot ${c.slot}`}
                     {c.venue && (
                       <span style={{ color: "#6B7590", fontWeight: 400 }}>
                         {" "}
@@ -2481,6 +3216,7 @@ export function Timetable({
                 <motion.button
                   data-ocid={`timetable.delete_button.${idx + 1}`}
                   whileTap={{ scale: 0.9 }}
+                  type="button"
                   onClick={() => {
                     onDeleteCourse(c.id);
                     onDeleteEntriesForCourse(c.id);
@@ -2560,6 +3296,7 @@ export function Timetable({
                 <motion.button
                   data-ocid="timetable.cancel_button"
                   whileTap={{ scale: 0.96 }}
+                  type="button"
                   className="glass-btn"
                   style={{ padding: "9px 20px", fontSize: 13 }}
                   onClick={() => setDeleteCell(null)}
@@ -2569,6 +3306,7 @@ export function Timetable({
                 <motion.button
                   data-ocid="timetable.delete_button"
                   whileTap={{ scale: 0.96 }}
+                  type="button"
                   className="btn-gradient"
                   style={{
                     padding: "9px 20px",
@@ -2577,7 +3315,7 @@ export function Timetable({
                   }}
                   onClick={() => {
                     if (deleteCell.entryId) {
-                      // Delete ONLY this specific entry instance (the critical fix)
+                      // Delete ONLY this specific entry instance
                       onDeleteTimetableEntry(deleteCell.entryId);
                     } else if (deleteCell.courseId) {
                       // Legacy: full course delete (from course cards)
@@ -2600,6 +3338,100 @@ export function Timetable({
                 >
                   Remove This Instance
                 </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Lunch Add Form Modal (large screen) */}
+      <AnimatePresence>
+        {lunchFormDay !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              backdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+            }}
+            onClick={() => setLunchFormDay(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "linear-gradient(135deg, #12142a 0%, #0d0f20 100%)",
+                border: "1px solid rgba(139,92,246,0.35)",
+                borderRadius: 16,
+                padding: "28px 32px",
+                minWidth: 320,
+                maxWidth: 420,
+                width: "90%",
+                boxShadow: "0 0 40px rgba(139,92,246,0.2)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#F0F4FF",
+                  marginBottom: 4,
+                }}
+              >
+                Add Lunch Class
+              </div>
+              <div style={{ fontSize: 12, color: "#6B7590", marginBottom: 18 }}>
+                {DAY_SHORTS[lunchFormDay ?? 0]} · 12:00–13:00
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                <input
+                  className="glass-input"
+                  placeholder="Class / Course Name *"
+                  value={lunchName}
+                  onChange={(e) => setLunchName(e.target.value)}
+                />
+                <input
+                  className="glass-input"
+                  placeholder="Venue (optional)"
+                  value={lunchVenue}
+                  onChange={(e) => setLunchVenue(e.target.value)}
+                />
+                <ColorSwatchPicker
+                  selected={lunchColor}
+                  onChange={setLunchColor}
+                />
+                <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    type="button"
+                    className="btn-gradient"
+                    style={{ flex: 1, padding: "9px 16px", fontSize: 13 }}
+                    onClick={() => handleAddLunchOverride(lunchFormDay!)}
+                  >
+                    Add Class
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    type="button"
+                    className="glass-btn"
+                    style={{ padding: "9px 16px", fontSize: 13 }}
+                    onClick={() => setLunchFormDay(null)}
+                  >
+                    Cancel
+                  </motion.button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

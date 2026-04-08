@@ -45,6 +45,15 @@ function toISO(date: Date): string {
   return date.toISOString();
 }
 
+function formatTime12(time24: string): string {
+  const [hStr, mStr] = time24.split(":");
+  const h = Number.parseInt(hStr, 10);
+  const m = Number.parseInt(mStr, 10);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
+}
+
 function buildSchedule(
   courses: Course[],
   timetableEntries: TimetableEntry[],
@@ -73,50 +82,55 @@ function buildSchedule(
     const summaryDateStr = dailySummaryDate.toISOString().split("T")[0];
 
     // Use timetableEntries if available, otherwise fall back to courses
-    const todayCourseNames: string[] = [];
+    // Build list of "CourseName – Time (Venue)" lines
+    const summaryLines: string[] = [];
+    const seenCodes = new Set<string>();
+
     if (timetableEntries.length > 0) {
-      const uniqueNames = new Set<string>();
-      for (const e of timetableEntries) {
-        if (e.day === iitmDay) uniqueNames.add(`${e.courseName} (${e.slot})`);
+      const dayEntries = timetableEntries.filter(
+        (e) => e.day === iitmDay && e.slot !== "LUNCH",
+      );
+      // Deduplicate: same course on same day shown once (PQRST may have multiple)
+      for (const e of dayEntries) {
+        const key = `${e.courseCode || e.courseId}-${e.startTime}`;
+        if (seenCodes.has(key)) continue;
+        seenCodes.add(key);
+        const timeStr = formatTime12(e.startTime);
+        const venuePart = e.venue ? ` (${e.venue})` : "";
+        summaryLines.push(`• ${e.courseName} – ${timeStr}${venuePart}`);
       }
-      todayCourseNames.push(...uniqueNames);
     } else if (iitmDay >= 0 && iitmDay <= 4) {
       for (const c of courses) {
         const occs =
           c.slot === "EXTRA_6_8"
             ? [{ day: iitmDay, col: EXTRA_SLOT_COL_INDEX }]
             : (SLOT_OCCURRENCES[c.slot] ?? []);
-        if (occs.some((o) => o.day === iitmDay))
-          todayCourseNames.push(`${c.name} (${c.slot})`);
+        if (occs.some((o) => o.day === iitmDay)) {
+          const occ = occs.find((o) => o.day === iitmDay);
+          const col = occ
+            ? c.slot === "EXTRA_6_8"
+              ? EXTRA_SLOT_TIME
+              : TIME_COLUMNS[occ.col]
+            : null;
+          const timeStr = col ? formatTime12(col.start) : "";
+          const venuePart = c.venue ? ` (${c.venue})` : "";
+          summaryLines.push(`• ${c.name} – ${timeStr}${venuePart}`);
+        }
       }
     }
 
-    const tasksDueToday = tasks.filter(
-      (t) => !t.completed && t.date === summaryDateStr,
-    );
-    const examsDueToday = examEntries.filter((e) => e.date === summaryDateStr);
-
+    const classCount = summaryLines.length;
     let summaryBody = "";
-    if (todayCourseNames.length > 0) {
-      summaryBody += todayCourseNames.slice(0, 3).join(", ");
-      if (todayCourseNames.length > 3)
-        summaryBody += ` +${todayCourseNames.length - 3} more`;
-      summaryBody += ". ";
+    if (classCount > 0) {
+      summaryBody = `You have ${classCount} class${classCount !== 1 ? "es" : ""} today:\n\n${summaryLines.join("\n")}`;
     } else {
-      summaryBody += "No classes today. ";
-    }
-    if (tasksDueToday.length > 0)
-      summaryBody += `${tasksDueToday.length} task${tasksDueToday.length > 1 ? "s" : ""} due. `;
-    for (const ex of examsDueToday) {
-      const course = courses.find((c) => c.id === ex.courseId);
-      if (course)
-        summaryBody += `${course.name} ${ex.examType === "quiz1" ? "Quiz 1" : ex.examType === "quiz2" ? "Quiz 2" : "End Sem"} today! `;
+      summaryBody = "No classes today. Have a great day!";
     }
 
     notifications.push({
       tag: `daily-summary-${summaryDateStr}`,
-      title: "InstiFlow — Good Morning 📚",
-      body: summaryBody.trim() || "Have a great day!",
+      title: "Today's Schedule",
+      body: summaryBody.trim(),
       scheduledAt: toISO(dailySummaryDate),
     });
   }
@@ -408,20 +422,18 @@ export function NotificationManager({
 
       if (msUntil > 0 && msUntil < 24 * 60 * 60 * 1000) {
         const tag = `class-reminder-${item.id}-${item.startTime}`;
+        const timeStr = formatTime12(item.startTime);
+        const bodyText = item.venue
+          ? `${item.name} at ${timeStr} (${item.venue})`
+          : `${item.name} at ${timeStr}`;
         const timer = setTimeout(() => {
           if (Notification.permission !== "granted") return;
-          new Notification(
-            `InstiFlow — Class in ${reminderMinutes} Minutes 🔔`,
-            {
-              body: `${item.name} (Slot ${item.slot}) at ${item.startTime}${item.venue ? ` · ${item.venue}` : ""}`,
-              icon: "/icons/icon-192.png",
-              tag,
-            },
-          );
-          showForeground(
-            `Class in ${reminderMinutes} min`,
-            `${item.name} at ${item.startTime}`,
-          );
+          new Notification("Upcoming Class", {
+            body: bodyText,
+            icon: "/icons/icon-192.png",
+            tag,
+          });
+          showForeground("Upcoming Class", bodyText);
         }, msUntil);
         timers.push(timer);
       }
@@ -449,47 +461,43 @@ export function NotificationManager({
 
       const [sumH, sumM] = prefs.dailySummaryTime.split(":").map(Number);
       if (prefs.dailySummaryEnabled && h === sumH && m < sumM + 5) {
-        const todayEntries = timetableEntries.filter((e) => e.day === iitmDay);
-        const items =
-          todayEntries.length > 0
-            ? todayEntries
-            : iitmDay >= 0 && iitmDay <= 4
-              ? courses.filter((c) => {
-                  const occs =
-                    c.slot === "EXTRA_6_8"
-                      ? [{ day: iitmDay }]
-                      : (SLOT_OCCURRENCES[c.slot] ?? []);
-                  return occs.some((o) => o.day === iitmDay);
-                })
-              : [];
+        const summaryKey = `daily-summary-${today}`;
+        if (!firedRef.current.has(summaryKey)) {
+          firedRef.current.add(summaryKey);
+          const todayEntries = timetableEntries.filter(
+            (e) => e.day === iitmDay && e.slot !== "LUNCH",
+          );
+          const summaryLines: string[] = [];
+          const seenKeys = new Set<string>();
 
-        for (const item of items) {
-          const name =
-            (item as unknown as Record<string, unknown>).courseName ??
-            (item as unknown as Record<string, unknown>).name;
-          const slot = (item as unknown as Record<string, unknown>).slot;
-          const key = `class-${today}-${(item as unknown as Record<string, unknown>).courseId ?? (item as unknown as Record<string, unknown>).id}`;
-          if (!firedRef.current.has(key)) {
-            firedRef.current.add(key);
-            showNotification(
-              "InstiFlow — Class Today 📚",
-              `${name} (Slot ${slot})`,
-            );
-          }
-        }
-
-        for (const c of courses) {
-          const stats = calcAttendance(attendance, c.id);
-          if (stats.percentage < 75 && stats.total > 0) {
-            const key = `attn-warn-${today}-${c.id}`;
-            if (!firedRef.current.has(key)) {
-              firedRef.current.add(key);
-              showNotification(
-                "InstiFlow — Attendance Warning ⚠️",
-                `${c.name}: ${stats.percentage}% (need ${stats.toReach75} more classes)`,
-              );
+          if (todayEntries.length > 0) {
+            for (const e of todayEntries) {
+              const key = `${e.courseCode || e.courseId}-${e.startTime}`;
+              if (seenKeys.has(key)) continue;
+              seenKeys.add(key);
+              const timeStr = formatTime12(e.startTime);
+              const venuePart = e.venue ? ` (${e.venue})` : "";
+              summaryLines.push(`• ${e.courseName} – ${timeStr}${venuePart}`);
+            }
+          } else if (iitmDay >= 0 && iitmDay <= 4) {
+            for (const c of courses) {
+              const occs =
+                c.slot === "EXTRA_6_8"
+                  ? [{ day: iitmDay }]
+                  : (SLOT_OCCURRENCES[c.slot] ?? []);
+              if (occs.some((o) => o.day === iitmDay)) {
+                summaryLines.push(`• ${c.name}`);
+              }
             }
           }
+
+          const classCount = summaryLines.length;
+          const summaryBody =
+            classCount > 0
+              ? `You have ${classCount} class${classCount !== 1 ? "es" : ""} today:\n\n${summaryLines.join("\n")}`
+              : "No classes today. Have a great day!";
+
+          showNotification("Today's Schedule", summaryBody);
         }
       }
 

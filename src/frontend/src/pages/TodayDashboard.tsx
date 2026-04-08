@@ -89,10 +89,14 @@ export function TodayDashboard({
       ? getClassesOnDayFromEntries(dayOfWeek, timetableEntries)
       : getClassesOnDay(dayOfWeek, courses);
 
-  // Unique course count from entries (includes EXTRA_6_8), fallback to courses.length
+  // Unique course count: same courseCode across multiple slots counts as ONE course
   const uniqueCourseCount =
     timetableEntries.length > 0
-      ? new Set(timetableEntries.map((e) => e.courseId)).size
+      ? new Set(
+          timetableEntries
+            .filter((e) => e.slot !== "LUNCH") // exclude manual lunch overrides from count
+            .map((e) => e.courseCode || e.courseId),
+        ).size
       : courses.length;
 
   const upcomingTasks = tasks

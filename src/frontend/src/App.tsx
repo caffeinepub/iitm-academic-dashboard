@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { NotificationManager } from "./components/NotificationManager";
 import { Sidebar, type TabId } from "./components/Sidebar";
+import { SplashScreen } from "./components/SplashScreen";
 import { TAB_THEMES, TabThemeContext } from "./contexts/TabTheme";
 import { useAppData } from "./hooks/useAppData";
 import { AdminPanel } from "./pages/AdminPanel";
@@ -111,6 +112,9 @@ function useIsMobile() {
 }
 
 export default function App() {
+  // ── Splash screen — shown for first 1500ms ───────────────────────────────
+  const [showSplash, setShowSplash] = useState(true);
+
   // ── Restore session on refresh ───────────────────────────────────────────
   // If user previously chose a storage mode, skip the landing/login flow.
   const choice = getStoredChoice();
@@ -398,6 +402,9 @@ export default function App() {
 
   return (
     <>
+      {/* Splash screen — shown on first load for 1500ms */}
+      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+
       <AnimatePresence mode="wait">
         {showLanding ? (
           <motion.div
